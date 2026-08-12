@@ -97,6 +97,32 @@ impl Store {
         db_tx.commit()?;
         Ok(stored)
     }
+
+    pub fn record_reconcile(
+        &mut self,
+        proof: &ledgerkit_core::ReconcileProof,
+        report_path: Option<String>,
+    ) -> Result<Event> {
+        let unmatched = (proof.skipped_duplicates.len() + proof.after_as_of.len()) as u64;
+        let db_tx = self.conn.transaction()?;
+        let prev = tip_hash(&db_tx)?;
+        let event = Event::seal(
+            EventKind::Reconciled,
+            EventPayload::Reconciled {
+                account: proof.account.clone(),
+                as_of: proof.as_of.to_string(),
+                ending_balance: proof.stated_ending.to_string(),
+                matched: proof.matched.len() as u64,
+                unmatched,
+                unexplained_delta: proof.unexplained_delta.to_string(),
+                report_path,
+            },
+            prev,
+        );
+        let stored = append_sealed_event(&db_tx, event)?;
+        db_tx.commit()?;
+        Ok(stored)
+    }
 }
 
 fn tip_hash(conn: &rusqlite::Connection) -> Result<ContentHash> {

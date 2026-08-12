@@ -59,8 +59,8 @@ ledgerkit replay [--through N]
 ledgerkit import ./statement.csv --account assets:bank:hdfc --adapter hdfc
 ledgerkit rules apply --file fixtures/rules/default.yaml
 ledgerkit dedupe
-ledgerkit reconcile --balance 12345.67 --as-of 2026-03-31
-ledgerkit why tx_…
+ledgerkit reconcile --account assets:bank:checking --balance 2409.20 --as-of 2026-01-07 --commodity USD
+ledgerkit why <tx-id>
 ledgerkit export --format beancount --out ledger.bean
 ledgerkit adapters
 ```
@@ -94,7 +94,9 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 ## Status
 
-**Phase 4 (Dedupe + rules):** in review — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
+**Phase 4 (Dedupe + rules):** done — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
+
+**Phase 5 (Reconcile + why):** in review — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
 
 See [docs/roadmap.md](docs/roadmap.md) and [docs/design.md](docs/design.md).
 

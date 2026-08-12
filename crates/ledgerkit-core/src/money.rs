@@ -67,6 +67,10 @@ impl Amount {
     pub fn checked_neg(self) -> Option<Self> {
         self.0.checked_mul(Decimal::NEGATIVE_ONE).map(Self)
     }
+
+    pub fn checked_sub(self, other: Self) -> Option<Self> {
+        self.0.checked_sub(other.0).map(Self)
+    }
 }
 
 impl fmt::Display for Amount {
