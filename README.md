@@ -34,6 +34,8 @@ cargo test --workspace
 cargo run -p ledgerkit-cli -- init --dir .demo
 cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
   --account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
+cargo run -p ledgerkit-cli -- dedupe --dir .demo
+cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
 cargo run -p ledgerkit-cli -- verify --dir .demo
 cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
 ```
@@ -55,7 +57,7 @@ ledgerkit balance --account assets:bank:hdfc
 ledgerkit verify
 ledgerkit replay [--through N]
 ledgerkit import ./statement.csv --account assets:bank:hdfc --adapter hdfc
-ledgerkit rules apply
+ledgerkit rules apply --file fixtures/rules/default.yaml
 ledgerkit dedupe
 ledgerkit reconcile --balance 12345.67 --as-of 2026-03-31
 ledgerkit why tx_…
@@ -92,7 +94,7 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 ## Status
 
-**Phase 3 (Import):** done — CSV adapters write balanced postings + `Imported` events; idempotent by file hash; golden parse fixtures.
+**Phase 4 (Dedupe + rules):** in review — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
 
 See [docs/roadmap.md](docs/roadmap.md) and [docs/design.md](docs/design.md).
 

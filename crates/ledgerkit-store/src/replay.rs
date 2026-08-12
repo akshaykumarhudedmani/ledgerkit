@@ -9,8 +9,8 @@ use crate::Store;
 impl Store {
     /// Rebuild ledger snapshot by folding events with `seq <= max_seq`.
     ///
-    /// Only `Posted` events contribute transactions (Phase 2). Account events are
-    /// applied for completeness but do not affect the ledger content hash.
+    /// `Posted` events add transactions; `Deduped` / `Categorized` fold onto them.
+    /// Account events are applied for completeness but do not affect the ledger content hash.
     pub fn replay_through(&self, max_seq: u64) -> Result<LedgerSnapshot> {
         let events = self.events_through(max_seq)?;
         let mut snapshot = LedgerSnapshot::default();
@@ -39,6 +39,20 @@ impl Store {
                         .find(|t| t.id == duplicate_id)
                     {
                         tx.duplicate_of = Some(survivor_id);
+                    }
+                }
+                EventPayload::Categorized {
+                    transaction_id,
+                    category,
+                    ..
+                } => {
+                    if let Some(tx) = snapshot
+                        .transactions
+                        .iter_mut()
+                        .find(|t| t.id == transaction_id)
+                    {
+                        tx.tags.retain(|t| !t.starts_with("category:"));
+                        tx.tags.push(format!("category:{category}"));
                     }
                 }
                 _ => {}

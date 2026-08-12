@@ -5,7 +5,7 @@
 | 1. Spec | 1–2 | Design doc + schema + invariants + repo skeleton | **Done** | — (setup complete) |
 | 2. Ledger core | 2–3 | Postings persistence, balances, event append/replay, `verify` | **Done** | `/review-bugbot` |
 | 3. Import + adapters | 2–3 | HDFC + generic + credit card + custom; golden fixtures | **Done** | `/review-bugbot` → `/review-security` |
-| 4. Dedupe + rules | 2 | Explainable engines + metrics | Next | `/review-bugbot` |
+| 4. Dedupe + rules | 2 | Explainable engines + metrics | **In review (this PR)** | `/review-bugbot` |
 | 5. Reconcile + why | 2 | Proof reports + `why` command | Stubbed CLI | `/review-bugbot` → `/review-security` |
 | 6. Export + polish | 1–2 | Beancount depth + README demo video script | JSON/Beancount stub | `/review-bugbot` (+ `/split-to-prs` if messy) |
 | 7. Hardening | 2 | Fuzzing, benchmarks, thesis eval chapter | Planned | `/review-bugbot` + `/review-security` |
