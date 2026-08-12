@@ -6,7 +6,6 @@ use clap::{Parser, Subcommand};
 use ledgerkit_core::{verify_ledger, LedgerSnapshot};
 use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
-use ledgerkit_import::BankAdapter as _;
 use ledgerkit_store::Store;
 
 #[derive(Parser, Debug)]
