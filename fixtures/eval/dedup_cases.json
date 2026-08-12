@@ -1,0 +1,30 @@
+[
+  {
+    "payee_a": "STARBUCKS STORE 12345",
+    "payee_b": "STARBUCKS STORE 12345",
+    "same_date": true,
+    "same_amount": true,
+    "should_link": true
+  },
+  {
+    "payee_a": "NETFLIX.COM",
+    "payee_b": "NETFLIX.COM",
+    "same_date": false,
+    "same_amount": true,
+    "should_link": true
+  },
+  {
+    "payee_a": "STARBUCKS",
+    "payee_b": "UBER *TRIP",
+    "same_date": true,
+    "same_amount": true,
+    "should_link": false
+  },
+  {
+    "payee_a": "ACME PAYROLL",
+    "payee_b": "ACME PAYROLL",
+    "same_date": true,
+    "same_amount": false,
+    "should_link": false
+  }
+]

@@ -24,14 +24,20 @@ pub fn normalize_merchant(raw: &str) -> NormalizedMerchant {
         reasons.push("collapse_whitespace".into());
     }
 
-    let without_refs = Regex::new(r"(\*|\#)?[A-Z0-9]{6,}$")
+    // Only strip processor-style refs (`*ABC123`), never a whole merchant name.
+    let stripped = Regex::new(r"(\*|\#)[A-Z0-9]{4,}$")
         .unwrap()
         .replace(&collapsed, "")
         .trim()
         .to_string();
-    if without_refs != collapsed {
-        reasons.push("strip_trailing_ref".into());
-    }
+    let without_refs = if stripped.is_empty() {
+        collapsed.clone()
+    } else {
+        if stripped != collapsed {
+            reasons.push("strip_trailing_ref".into());
+        }
+        stripped
+    };
 
     let key = without_refs
         .chars()
@@ -62,5 +68,6 @@ mod tests {
         let n = normalize_merchant("AMZN MKTP US*ABC123");
         assert_eq!(n.canonical_key, "amzn_mktp_us");
         assert!(n.confidence >= 80);
+        assert_eq!(normalize_merchant("STARBUCKS").canonical_key, "starbucks");
     }
 }
