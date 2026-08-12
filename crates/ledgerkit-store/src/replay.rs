@@ -69,7 +69,7 @@ impl Store {
 
     pub fn balance_of(&self, account: &AccountId, commodity: &Commodity) -> Result<Amount> {
         let snapshot = self.load_snapshot()?;
-        Ok(account_balance(&snapshot, account, commodity))
+        Ok(account_balance(&snapshot, account, commodity)?)
     }
 }
 
