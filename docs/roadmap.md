@@ -10,7 +10,7 @@
 | 6. Export + polish | 1–2 | Beancount depth + README demo video script | JSON/Beancount stub | `/review-bugbot` (+ `/split-to-prs` if messy) |
 | 7. Hardening | 2 | Fuzzing, benchmarks, thesis eval chapter | Planned | `/review-bugbot` + `/review-security` |
 
-Agent will **stop and remind you** at each phase boundary. Full workflow: [agent-workflow.md](agent-workflow.md).
+Agent will **stop and remind you** at each phase boundary. From Phase 4 on, work lives on a **feature branch + PR** so `/review-bugbot` / `/review-security` see a real diff vs `master`. Full workflow: [agent-workflow.md](agent-workflow.md).
 
 ## Demo script (interview, ~10 min)
 
