@@ -1,14 +1,16 @@
 # Roadmap (12–16 weeks)
 
-| Phase | Weeks | Deliverable | Status |
-|-------|-------|-------------|--------|
-| 1. Spec | 1–2 | Design doc + schema + invariants + repo skeleton | **Current** |
-| 2. Ledger core | 2–3 | Postings persistence, balances, event append/replay, `verify` | Planned |
-| 3. Import + adapters | 2–3 | HDFC + generic + credit card + custom; golden fixtures | Stubbed |
-| 4. Dedupe + rules | 2 | Explainable engines + metrics | Stubbed CLI |
-| 5. Reconcile + why | 2 | Proof reports + `why` command | Stubbed CLI |
-| 6. Export + polish | 1–2 | Beancount depth + README demo video script | JSON/Beancount stub |
-| 7. Hardening | 2 | Fuzzing, benchmarks, thesis eval chapter | Planned |
+| Phase | Weeks | Deliverable | Status | After done, YOU run |
+|-------|-------|-------------|--------|---------------------|
+| 1. Spec | 1–2 | Design doc + schema + invariants + repo skeleton | **Done** | — (setup complete) |
+| 2. Ledger core | 2–3 | Postings persistence, balances, event append/replay, `verify` | Planned | `/review-bugbot` |
+| 3. Import + adapters | 2–3 | HDFC + generic + credit card + custom; golden fixtures | Stubbed | `/review-bugbot` → `/review-security` |
+| 4. Dedupe + rules | 2 | Explainable engines + metrics | Stubbed CLI | `/review-bugbot` |
+| 5. Reconcile + why | 2 | Proof reports + `why` command | Stubbed CLI | `/review-bugbot` → `/review-security` |
+| 6. Export + polish | 1–2 | Beancount depth + README demo video script | JSON/Beancount stub | `/review-bugbot` (+ `/split-to-prs` if messy) |
+| 7. Hardening | 2 | Fuzzing, benchmarks, thesis eval chapter | Planned | `/review-bugbot` + `/review-security` |
+
+Agent will **stop and remind you** at each phase boundary. Full workflow: [agent-workflow.md](agent-workflow.md).
 
 ## Demo script (interview, ~10 min)
 

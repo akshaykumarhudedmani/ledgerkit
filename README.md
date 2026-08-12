@@ -80,6 +80,11 @@ fixtures/             # anonymized sample CSVs + golden outputs
 - `credit_card` — credit-card Transaction Date/Description/Amount
 - `custom` — column-mapping adapter
 
+## Quality tooling
+
+- Agent rules/hooks: [docs/agent-workflow.md](docs/agent-workflow.md) and `AGENTS.md`
+- CI: GitHub Actions on every push
+
 ## Status
 
 **Phase 1 (Spec + skeleton):** in progress — design docs, schema, core invariants, CLI stubs, CI.

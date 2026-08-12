@@ -24,6 +24,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Hook / local agent noise
+.cursor/hooks/*.log
+
 # Python helpers / notebooks (optional local use)
 __pycache__/
 .venv/
