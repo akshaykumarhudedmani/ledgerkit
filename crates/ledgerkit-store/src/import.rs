@@ -291,4 +291,50 @@ mod tests {
         assert_eq!(store.transaction_count().unwrap(), 1);
         store.assert_replay_matches_materialized().unwrap();
     }
+
+    #[test]
+    fn convert_error_only_import_persists_statement_rows() {
+        let dir = tempdir().unwrap();
+        let mut store = Store::open(dir.path().join("l.sqlite")).unwrap();
+        let bank = Account::new(
+            AccountId::new("assets:bank").unwrap(),
+            AccountType::Asset,
+            Commodity::new("USD").unwrap(),
+            "Bank",
+        );
+        let spec = ImportBatchSpec {
+            id: ImportBatchId::new(),
+            adapter: "generic_csv".into(),
+            account_id: "assets:bank".into(),
+            source_path: "bad.csv".into(),
+            source_sha256: ContentHash::sha256_str("bad"),
+            imported_at: Utc::now(),
+            row_count: 1,
+        };
+        let rows = vec![StatementRowSpec {
+            row_number: 2,
+            date_raw: Some("not-a-date".into()),
+            amount_raw: Some("10".into()),
+            currency_raw: None,
+            description_raw: Some("x".into()),
+            balance_raw: None,
+            source_refs: vec![],
+            fingerprint: None,
+            parse_status: "convert_error".into(),
+            error: Some("unparseable date".into()),
+            transaction_id: None,
+        }];
+        let outcome = store.apply_import(spec, vec![bank], vec![], rows).unwrap();
+        assert!(matches!(
+            outcome,
+            ImportOutcome::Applied {
+                posted: 0,
+                skipped_existing: 0,
+                ..
+            }
+        ));
+        let report = store.prove_row_reconcile("assets:bank").unwrap();
+        assert_eq!(report.convert_errors.len(), 1);
+        assert!(!report.ok());
+    }
 }
