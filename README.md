@@ -46,6 +46,8 @@ On Windows PowerShell:
 .\scripts\demo.ps1
 ```
 
+Interview talk track (10 min): [docs/demo-script.md](docs/demo-script.md).
+
 ## CLI (v1 surface)
 
 ```text
@@ -62,6 +64,7 @@ ledgerkit dedupe
 ledgerkit reconcile --account assets:bank:checking --balance 2409.20 --as-of 2026-01-07 --commodity USD
 ledgerkit why <tx-id>
 ledgerkit export --format beancount --out ledger.bean
+ledgerkit export --format csv --out ledger.csv
 ledgerkit adapters
 ```
 
@@ -96,7 +99,9 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 **Phase 4 (Dedupe + rules):** done — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
 
-**Phase 5 (Reconcile + why):** in review — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
+**Phase 5 (Reconcile + why):** done — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
+
+**Phase 6 (Export + polish):** in review — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
 
 See [docs/roadmap.md](docs/roadmap.md) and [docs/design.md](docs/design.md).
 

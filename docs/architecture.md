@@ -23,7 +23,7 @@
 ## Plugin surface
 
 - **Adapters** implement `BankAdapter::parse(bytes) -> (RawTransactions, ParseReport)`.
-- **Exporters** implement `Exporter::export(&LedgerSnapshot) -> String`.
+- **Exporters** implement `Exporter::export(&LedgerSnapshot) -> String` (`json`, `beancount`, `csv`). Duplicates are omitted. Beancount emits `commodity`/`open` directives and transaction metadata.
 - In-repo proof: `plugins/sample-adapter`.
 
 ## Determinism rules

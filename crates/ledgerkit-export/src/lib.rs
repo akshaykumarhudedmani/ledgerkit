@@ -1,9 +1,11 @@
 //! Export plugins for LedgerKit.
 
 mod beancount;
+mod csv_export;
 mod json_export;
 
 pub use beancount::BeancountExporter;
+pub use csv_export::CsvExporter;
 pub use json_export::JsonExporter;
 
 use ledgerkit_core::LedgerSnapshot;
