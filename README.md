@@ -103,7 +103,7 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 **Phase 6 (Export + polish):** done — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
 
-**Phase 7 (Hardening):** in review — CSV fuzz, 100k-row bench, path-traversal tests, [eval chapter](docs/eval.md).
+**Phase 7 (Hardening):** done — CSV fuzz, 100k-row bench, path-traversal tests, [eval chapter](docs/eval.md).
 
 See [docs/roadmap.md](docs/roadmap.md), [docs/design.md](docs/design.md), and [docs/eval.md](docs/eval.md).
 
