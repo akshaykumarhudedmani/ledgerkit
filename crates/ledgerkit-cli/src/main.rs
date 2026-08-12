@@ -458,8 +458,12 @@ fn cmd_reconcile(
     ensure_workspace(dir)?;
     let mut store = Store::open(db_path(dir))?;
     if rows {
-        let report = store.prove_row_reconcile(account)?;
-        let filename = format!("reconcile-rows-{}.md", account.replace(':', "_"));
+        let account_id = AccountId::new(account)?;
+        let report = store.prove_row_reconcile(account_id.as_str())?;
+        let filename = format!(
+            "reconcile-rows-{}.md",
+            account_id.as_str().replace(':', "_")
+        );
         let path = proof_report_path(dir, &filename)?;
         fs::create_dir_all(dir.join("reports"))?;
         fs::write(&path, report.to_markdown())?;
@@ -593,6 +597,15 @@ fn cmd_import(
     let mut store = Store::open(db_path(dir))?;
     let adapter = adapters::builtin(adapter_id)
         .with_context(|| format!("unknown adapter '{adapter_id}' — try `ledgerkit adapters`"))?;
+    let meta_len = fs::metadata(path)
+        .with_context(|| format!("stat {}", path.display()))?
+        .len();
+    if meta_len > MAX_IMPORT_BYTES as u64 {
+        bail!(
+            "refusing to import {} ({meta_len} bytes > {MAX_IMPORT_BYTES} byte cap)",
+            path.display()
+        );
+    }
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     if bytes.len() > MAX_IMPORT_BYTES {
         bail!(
@@ -648,7 +661,8 @@ fn cmd_import(
             println!("    - {err}");
         }
     }
-    if converted.transactions.is_empty() {
+    let statement_rows = statement_specs(&raw, &converted, &report);
+    if converted.transactions.is_empty() && statement_rows.is_empty() {
         bail!(
             "no transactions converted (parse ok_rows={}, convert errors={})",
             report.ok_rows,
@@ -673,10 +687,9 @@ fn cmd_import(
         source_path: path.display().to_string(),
         source_sha256: hash,
         imported_at: Utc::now(),
-        row_count: converted.transactions.len() as u64,
+        row_count: statement_rows.len() as u64,
     };
     let posted_n = converted.transactions.len();
-    let statement_rows = statement_specs(&raw, &converted);
     match store.apply_import(spec, accounts, converted.transactions, statement_rows)? {
         ImportOutcome::Applied {
             batch_id,
@@ -697,11 +710,21 @@ fn cmd_import(
     Ok(())
 }
 
+fn parse_error_row_number(err: &str) -> Option<i64> {
+    let lower = err.to_ascii_lowercase();
+    let idx = lower.find("row ")?;
+    let rest = err.get(idx + 4..)?.trim_start();
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
 fn statement_specs(
     raw: &ledgerkit_import::RawTransactions,
     converted: &ledgerkit_import::ConvertReport,
+    parse: &ledgerkit_import::ParseReport,
 ) -> Vec<StatementRowSpec> {
-    raw.transactions
+    let mut rows: Vec<StatementRowSpec> = raw
+        .transactions
         .iter()
         .zip(converted.row_outcomes.iter())
         .map(|(row, outcome)| match outcome {
@@ -732,7 +755,28 @@ fn statement_specs(
                 transaction_id: None,
             },
         })
-        .collect()
+        .collect();
+    let used: std::collections::HashSet<i64> = rows.iter().map(|r| r.row_number).collect();
+    for (i, err) in parse.errors.iter().enumerate() {
+        let row_number = parse_error_row_number(err).unwrap_or(-(i as i64 + 1));
+        if used.contains(&row_number) {
+            continue;
+        }
+        rows.push(StatementRowSpec {
+            row_number,
+            date_raw: None,
+            amount_raw: None,
+            currency_raw: None,
+            description_raw: None,
+            balance_raw: None,
+            source_refs: Vec::new(),
+            fingerprint: None,
+            parse_status: "parse_error".into(),
+            error: Some(err.clone()),
+            transaction_id: None,
+        });
+    }
+    rows
 }
 
 fn cmd_rebuild(dir: &Path) -> Result<()> {
@@ -801,5 +845,58 @@ fn cmd_verify(dir: &Path) -> Result<()> {
             println!("  unbalanced: {u}");
         }
         bail!("verify: FAILED");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ledgerkit_import::{ParseReport, RawTransaction, RawTransactions};
+
+    #[test]
+    fn parse_error_row_number_extracts_adapter_format() {
+        assert_eq!(
+            parse_error_row_number("parse error at row 3: missing amount"),
+            Some(3)
+        );
+        assert_eq!(parse_error_row_number("row 12: csv boom"), Some(12));
+        assert_eq!(parse_error_row_number("no row here"), None);
+    }
+
+    #[test]
+    fn statement_specs_keep_parse_and_convert_errors() {
+        let raw = RawTransactions {
+            adapter_id: "generic_csv".into(),
+            transactions: vec![RawTransaction {
+                row_number: 2,
+                date_raw: "not-a-date".into(),
+                amount_raw: "10".into(),
+                currency_raw: None,
+                description_raw: "x".into(),
+                balance_raw: None,
+                source_refs: vec!["generic:row:2".into()],
+            }],
+        };
+        let converted = convert_raw(
+            &raw,
+            &ConvertOptions {
+                bank_account: AccountId::new("assets:bank").unwrap(),
+                expense_account: AccountId::new("expenses:uncategorized").unwrap(),
+                income_account: AccountId::new("income:uncategorized").unwrap(),
+                default_commodity: Commodity::new("USD").unwrap(),
+                import_batch_id: ImportBatchId::new(),
+            },
+        );
+        let parse = ParseReport {
+            ok_rows: 1,
+            error_rows: 1,
+            errors: vec!["parse error at row 3: missing amount".into()],
+        };
+        let rows = statement_specs(&raw, &converted, &parse);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|r| r.parse_status == "convert_error"));
+        assert!(rows.iter().any(|r| r.parse_status == "parse_error"
+            && r.row_number == 3
+            && r.error.as_deref() == Some("parse error at row 3: missing amount")));
     }
 }
