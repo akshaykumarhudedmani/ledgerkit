@@ -63,10 +63,18 @@ impl Store {
                     summary,
                 } if *transaction_id == tx_id => Some(format!("manual_edit {summary}")),
                 EventPayload::Reconciled { account, as_of, .. } => {
-                    let hits_account = tx
-                        .map(|t| t.postings.iter().any(|p| p.account.as_str() == account.as_str()))
+                    let in_proof = tx
+                        .map(|t| {
+                            let hits = t
+                                .postings
+                                .iter()
+                                .any(|p| p.account.as_str() == account.as_str());
+                            let as_of_date =
+                                chrono::NaiveDate::parse_from_str(as_of, "%Y-%m-%d").ok();
+                            hits && as_of_date.is_some_and(|d| t.date <= d)
+                        })
                         .unwrap_or(false);
-                    if hits_account {
+                    if in_proof {
                         Some(format!("reconciled account={account} as_of={as_of}"))
                     } else {
                         None
@@ -154,6 +162,17 @@ mod tests {
         store
             .apply_category(id_a, "expenses:food", "coffee", 80, vec!["payee".into()])
             .unwrap();
+        let later = Transaction::transfer(
+            chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+            AccountId::new("assets:bank").unwrap(),
+            AccountId::new("expenses:food").unwrap(),
+            Amount::parse("1.00").unwrap(),
+            Commodity::new("USD").unwrap(),
+            "Later",
+        )
+        .unwrap();
+        let id_later = later.id;
+        store.post_transaction(later).unwrap();
         store
             .record_reconcile(
                 &ledgerkit_core::prove_reconcile(
@@ -167,7 +186,7 @@ mod tests {
                     },
                 )
                 .unwrap(),
-                Some("reports/reconcile-assets_bank-2026-01-31.md".into()),
+                Some("reports/reconcile-assets_bank-2026-01-02.md".into()),
             )
             .unwrap();
 
@@ -180,5 +199,13 @@ mod tests {
         let why_b = store.why_transaction(id_b).unwrap();
         assert!(why_b.iter().any(|s| s.kind == "deduped"));
         assert!(why_b.iter().any(|s| s.summary.contains(&id_a.to_string())));
+        assert!(why_b.iter().any(|s| s.kind == "reconciled"));
+
+        let why_later = store.why_transaction(id_later).unwrap();
+        assert!(why_later.iter().any(|s| s.kind == "posted"));
+        assert!(
+            why_later.iter().all(|s| s.kind != "reconciled"),
+            "txs after as_of must not inherit the reconcile event: {why_later:?}"
+        );
     }
 }
