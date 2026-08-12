@@ -12,6 +12,7 @@ pub mod hash;
 pub mod ids;
 pub mod money;
 pub mod posting;
+pub mod reconcile;
 pub mod transaction;
 pub mod verify;
 
@@ -22,6 +23,7 @@ pub use hash::ContentHash;
 pub use ids::{CategoryId, ImportBatchId, MerchantId, TransactionId};
 pub use money::{Amount, Commodity, Money};
 pub use posting::Posting;
+pub use reconcile::{prove_reconcile, ReconcileProof, ReconcileRequest};
 pub use transaction::Transaction;
 pub use verify::{
     account_balance, verify_ledger, verify_transaction, LedgerSnapshot, VerifyReport,
