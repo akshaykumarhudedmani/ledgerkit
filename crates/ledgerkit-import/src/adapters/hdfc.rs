@@ -22,12 +22,13 @@ impl BankAdapter for HdfcCsvAdapter {
             |row, headers, record| {
                 let date = get(headers, record, "Date")?;
                 let narration = get(headers, record, "Narration")?;
-                let withdrawal = get(headers, record, "Withdrawal Amt.").unwrap_or("");
-                let deposit = get(headers, record, "Deposit Amt.").unwrap_or("");
-                let amount = if !deposit.trim().is_empty() {
-                    deposit.trim().to_string()
-                } else if !withdrawal.trim().is_empty() {
-                    format!("-{}", withdrawal.trim())
+                let withdrawal =
+                    blank_amount(get(headers, record, "Withdrawal Amt.").unwrap_or(""));
+                let deposit = blank_amount(get(headers, record, "Deposit Amt.").unwrap_or(""));
+                let amount = if !deposit.is_empty() {
+                    deposit
+                } else if !withdrawal.is_empty() {
+                    format!("-{}", withdrawal)
                 } else {
                     return Err(AdapterError::Row {
                         row,
@@ -120,4 +121,29 @@ pub(crate) fn get<'a>(
         row: 0,
         message: format!("missing field {name}"),
     })
+}
+
+fn blank_amount(raw: &str) -> String {
+    let t = raw.trim();
+    if t.is_empty() || t == "-" {
+        String::new()
+    } else {
+        t.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BankAdapter;
+
+    #[test]
+    fn parses_hdfc_fixture() {
+        let bytes = include_bytes!("../../../../fixtures/csv/hdfc/sample.csv");
+        let (raw, report) = HdfcCsvAdapter.parse(bytes).unwrap();
+        assert_eq!(report.error_rows, 0);
+        assert_eq!(raw.transactions.len(), 3);
+        assert_eq!(raw.transactions[0].amount_raw, "1299.00");
+        assert_eq!(raw.transactions[1].amount_raw, "-1299.00");
+    }
 }

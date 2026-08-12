@@ -20,25 +20,7 @@ impl Store {
         );
 
         let db_tx = self.conn.transaction()?;
-        db_tx.execute(
-            "INSERT INTO accounts (id, account_type, commodity, name)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(id) DO UPDATE SET
-               account_type=excluded.account_type,
-               commodity=excluded.commodity,
-               name=excluded.name",
-            (
-                account.id.as_str(),
-                account_type_str(account.account_type),
-                account.commodity.as_str(),
-                account.name.as_str(),
-            ),
-        )?;
-        db_tx.execute(
-            "INSERT INTO commodities (code, decimals) VALUES (?1, 2)
-             ON CONFLICT(code) DO NOTHING",
-            [account.commodity.as_str()],
-        )?;
+        insert_account_rows(&db_tx, &account)?;
         let stored = append_sealed_event(&db_tx, event)?;
         db_tx.commit()?;
         Ok(stored)
@@ -139,6 +121,29 @@ impl Store {
         }
         Ok(postings)
     }
+}
+
+pub(crate) fn insert_account_rows(conn: &rusqlite::Connection, account: &Account) -> Result<()> {
+    conn.execute(
+        "INSERT INTO accounts (id, account_type, commodity, name)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+           account_type=excluded.account_type,
+           commodity=excluded.commodity,
+           name=excluded.name",
+        (
+            account.id.as_str(),
+            account_type_str(account.account_type),
+            account.commodity.as_str(),
+            account.name.as_str(),
+        ),
+    )?;
+    conn.execute(
+        "INSERT INTO commodities (code, decimals) VALUES (?1, 2)
+         ON CONFLICT(code) DO NOTHING",
+        [account.commodity.as_str()],
+    )?;
+    Ok(())
 }
 
 pub(crate) fn insert_transaction_rows(

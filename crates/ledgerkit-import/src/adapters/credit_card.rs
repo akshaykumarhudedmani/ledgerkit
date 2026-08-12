@@ -24,10 +24,17 @@ impl BankAdapter for CreditCardCsvAdapter {
             bytes,
             &["Transaction Date", "Description", "Amount"],
             |row, headers, record| {
+                let amount = get(headers, record, "Amount")?;
+                if amount.trim().is_empty() {
+                    return Err(AdapterError::Row {
+                        row,
+                        message: "missing amount".into(),
+                    });
+                }
                 Ok(RawTransaction {
                     row_number: row,
                     date_raw: get(headers, record, "Transaction Date")?.to_string(),
-                    amount_raw: get(headers, record, "Amount")?.to_string(),
+                    amount_raw: amount.to_string(),
                     currency_raw: get(headers, record, "Currency").ok().map(str::to_string),
                     description_raw: get(headers, record, "Description")?.to_string(),
                     balance_raw: None,

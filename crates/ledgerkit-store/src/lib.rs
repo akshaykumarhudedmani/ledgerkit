@@ -2,9 +2,11 @@
 
 mod db;
 mod events;
+mod import;
 mod ledger;
 mod replay;
 mod schema;
 
 pub use db::Store;
+pub use import::{ImportBatchSpec, ImportOutcome};
 pub use schema::SCHEMA_VERSION;

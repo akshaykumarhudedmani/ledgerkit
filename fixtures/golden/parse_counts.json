@@ -1,0 +1,6 @@
+{
+  "generic_csv": { "ok_rows": 4, "error_rows": 0 },
+  "hdfc": { "ok_rows": 3, "error_rows": 0 },
+  "credit_card": { "ok_rows": 3, "error_rows": 0 },
+  "generic_malformed": { "ok_rows": 1, "error_rows": 1 }
+}
