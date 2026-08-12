@@ -1,0 +1,10 @@
+[package]
+name = "ledgerkit-sample-adapter"
+description = "Sample external adapter proving the LedgerKit plugin SDK"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ledgerkit-import = { workspace = true }

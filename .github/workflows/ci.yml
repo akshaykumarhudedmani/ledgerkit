@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+      - name: demo smoke
+        shell: bash
+        run: |
+          cargo build -p ledgerkit-cli
+          cargo run -p ledgerkit-cli -- init --dir .demo
+          cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
+            --account assets:bank:checking --adapter generic_csv --dir .demo
+          cargo run -p ledgerkit-cli -- verify --dir .demo
+          cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
