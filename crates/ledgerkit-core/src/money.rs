@@ -60,6 +60,11 @@ impl Amount {
         self.0.is_zero()
     }
 
+    /// Scale-stripped decimal string for fingerprints (`10.00` and `10` match).
+    pub fn canonical_string(self) -> String {
+        self.0.normalize().to_string()
+    }
+
     pub fn checked_add(self, other: Self) -> Option<Self> {
         self.0.checked_add(other.0).map(Self)
     }

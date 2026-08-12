@@ -5,6 +5,9 @@ use crate::raw::RawTransactions;
 /// Stable plugin id, e.g. `hdfc`, `generic_csv`, `credit_card`, `custom`.
 pub type AdapterId = str;
 
+/// Reject statement files larger than this (DoS bound).
+pub const MAX_IMPORT_BYTES: usize = 32 * 1024 * 1024;
+
 #[derive(Debug, Error)]
 pub enum AdapterError {
     #[error("parse error at row {row}: {message}")]

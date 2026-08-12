@@ -19,6 +19,9 @@ pub struct Transaction {
     /// Soft link: never delete duplicates; point at survivor.
     pub duplicate_of: Option<TransactionId>,
     pub tags: Vec<String>,
+    /// Import row fingerprint (`v1|…`). Manual `tx add` leaves this unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_fingerprint: Option<String>,
 }
 
 impl Transaction {
@@ -33,6 +36,7 @@ impl Transaction {
             import_batch_id: None,
             duplicate_of: None,
             tags: Vec::new(),
+            row_fingerprint: None,
         };
         verify_transaction(&tx)?;
         Ok(tx)

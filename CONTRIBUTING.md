@@ -1,33 +1,25 @@
 # Contributing
 
-## Principles
+This repository is a **finished product**. Useful PRs: bug fixes, fixture goldens, docs that match the code. Not useful: new product surfaces listed as out of scope in [docs/final.md](docs/final.md).
 
-1. Money correctness beats features.
-2. Every mutate needs an event + explanation.
-3. Adapters never silently drop rows.
-4. Prefer deterministic rules over opaque ML.
+## Adapter path
 
-## Dev setup
+1. Implement `ledgerkit_import::BankAdapter` (deterministic `parse`, no wall-clock in output).
+2. Prefer a new crate under `plugins/` that depends **only** on public traits (see `plugins/sample-adapter`).
+3. Built-in adapters live in `crates/ledgerkit-import/src/adapters/` and must update `fixtures/golden/parse_counts.json`.
+4. Never commit real bank statements. Anonymize.
+
+## Checks
 
 ```bash
-rustup default stable
-cargo test --workspace
+cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
-Agent quality setup (rules + hooks + when to run `/` skills): see [docs/agent-workflow.md](docs/agent-workflow.md) and `AGENTS.md`.
+## Money and audit
 
-## Adding a bank adapter
-
-1. Implement `BankAdapter` in `crates/ledgerkit-import/src/adapters/`.
-2. Register in `adapters::builtin`.
-3. Add anonymized fixture under `fixtures/csv/<bank>/`.
-4. Add golden expectations when Phase 3 lands.
-5. Document columns in a short comment at the top of the adapter file.
-
-## PR checklist
-
-- [ ] Tests for new invariants / parsers
-- [ ] No floats in money paths
-- [ ] `cargo fmt` + clippy clean
-- [ ] Fixtures anonymized (no real account numbers / names)
+- `rust_decimal` / integer amounts only.
+- Unbalanced transactions must fail construction.
+- Import row failures go in `ParseReport` / `statement_rows`; never drop silently.
+- Duplicates get `duplicate_of`; never delete.

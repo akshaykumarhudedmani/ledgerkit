@@ -62,7 +62,9 @@ ledgerkit import ./statement.csv --account assets:bank:hdfc --adapter hdfc
 ledgerkit rules apply --file fixtures/rules/default.yaml
 ledgerkit dedupe
 ledgerkit reconcile --account assets:bank:checking --balance 2409.20 --as-of 2026-01-07 --commodity USD
-ledgerkit why <tx-id>
+ledgerkit reconcile --account assets:bank:checking --rows
+ledgerkit why <tx-id-or-row-id>
+ledgerkit rebuild
 ledgerkit export --format beancount --out ledger.bean
 ledgerkit export --format csv --out ledger.csv
 ledgerkit adapters
@@ -97,19 +99,13 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 ## Status
 
-**Phase 4 (Dedupe + rules):** done — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
+**Final product freeze** — phases 1–7 shipped; identity, statement rows, row reconcile, and `rebuild` complete the engine. See [docs/final.md](docs/final.md).
 
-**Phase 5 (Reconcile + why):** done — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
+See [docs/roadmap.md](docs/roadmap.md), [docs/design.md](docs/design.md), [docs/identity.md](docs/identity.md), and [docs/eval.md](docs/eval.md).
 
-**Phase 6 (Export + polish):** done — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
+## Non-goals
 
-**Phase 7 (Hardening):** done — CSV fuzz, 100k-row bench, path-traversal tests, [eval chapter](docs/eval.md).
-
-See [docs/roadmap.md](docs/roadmap.md), [docs/design.md](docs/design.md), and [docs/eval.md](docs/eval.md).
-
-## Non-goals (v1)
-
-Mobile apps, consumer budgeting UI, PDF/OCR spine, Plaid, tax filing, multi-user cloud sync, “AI categorizes everything” as the main claim.
+Mobile apps, consumer budgeting UI, PDF/OCR, Plaid, tax filing, multi-user cloud sync, “AI categorizes everything”, and any v2 product in this repository.
 
 ## License
 

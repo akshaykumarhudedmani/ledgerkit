@@ -5,7 +5,7 @@
 //! - Import artifacts store sha256 of original bytes.
 //! - Derived balances are never stored as source of truth.
 
-pub const SCHEMA_VERSION: i32 = 2;
+pub const SCHEMA_VERSION: i32 = 3;
 
 pub const SCHEMA_SQL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     narration        TEXT,
     import_batch_id  TEXT REFERENCES import_batches(id),
     duplicate_of     TEXT REFERENCES transactions(id),
-    tags_json        TEXT NOT NULL DEFAULT '[]'
+    tags_json        TEXT NOT NULL DEFAULT '[]',
+    row_fingerprint  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS postings (
@@ -67,6 +68,24 @@ CREATE TABLE IF NOT EXISTS postings (
     commodity      TEXT NOT NULL,
     memo           TEXT,
     ordinal        INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS statement_rows (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id        TEXT NOT NULL REFERENCES import_batches(id),
+    adapter         TEXT NOT NULL,
+    account_id      TEXT NOT NULL,
+    row_number      INTEGER NOT NULL,
+    date_raw        TEXT,
+    amount_raw      TEXT,
+    currency_raw    TEXT,
+    description_raw TEXT,
+    balance_raw     TEXT,
+    source_refs     TEXT NOT NULL DEFAULT '[]',
+    fingerprint     TEXT,
+    parse_status    TEXT NOT NULL,
+    error           TEXT,
+    transaction_id  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -84,4 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_import_batches_idempotent
   ON import_batches(adapter, source_sha256, account_id);
+CREATE INDEX IF NOT EXISTS idx_tx_fingerprint ON transactions(row_fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_statement_rows_batch_row
+  ON statement_rows(batch_id, row_number);
 "#;
