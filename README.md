@@ -101,9 +101,11 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 **Phase 5 (Reconcile + why):** done — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
 
-**Phase 6 (Export + polish):** in review — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
+**Phase 6 (Export + polish):** done — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
 
-See [docs/roadmap.md](docs/roadmap.md) and [docs/design.md](docs/design.md).
+**Phase 7 (Hardening):** done — CSV fuzz, 100k-row bench, path-traversal tests, [eval chapter](docs/eval.md).
+
+See [docs/roadmap.md](docs/roadmap.md), [docs/design.md](docs/design.md), and [docs/eval.md](docs/eval.md).
 
 ## Non-goals (v1)
 

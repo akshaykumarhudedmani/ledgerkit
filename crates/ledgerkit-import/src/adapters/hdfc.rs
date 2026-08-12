@@ -51,6 +51,11 @@ impl BankAdapter for HdfcCsvAdapter {
     }
 }
 
+pub(crate) const MAX_CSV_ROWS: usize = 200_000;
+
+const _: () = assert!(MAX_CSV_ROWS >= 100_000);
+const _: () = assert!(MAX_CSV_ROWS <= 1_000_000);
+
 pub(crate) fn parse_simple_csv<F>(
     adapter_id: &str,
     bytes: &[u8],
@@ -83,6 +88,11 @@ where
     let mut transactions = Vec::new();
     let mut errors = Vec::new();
     for (idx, record) in reader.records().enumerate() {
+        if idx >= MAX_CSV_ROWS {
+            return Err(AdapterError::Schema(format!(
+                "too many data rows (max {MAX_CSV_ROWS})"
+            )));
+        }
         let row = idx + 2; // header is row 1
         match record {
             Ok(rec) => match map_row(row, &headers, &rec) {
