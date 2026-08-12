@@ -30,8 +30,8 @@ impl Exporter for CsvExporter {
                     csv_field(&tx.id.to_string()),
                     csv_field(&tx.payee),
                     csv_field(posting.account.as_str()),
-                    posting.amount,
-                    posting.commodity,
+                    csv_field(&posting.amount.to_string()),
+                    csv_field(posting.commodity.as_str()),
                     csv_field(posting.memo.as_deref().unwrap_or(""))
                 ));
             }
