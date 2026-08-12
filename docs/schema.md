@@ -39,12 +39,14 @@ Exact SQL: `crates/ledgerkit-store/src/schema.rs`.
 
 | Kind | Meaning |
 |------|---------|
-| `Imported` | New batch from adapter |
-| `Normalized` | Merchant/date/amount normalization |
-| `Deduped` | Linked duplicate → survivor |
-| `Categorized` | Rule applied |
-| `Reconciled` | Statement proof produced |
-| `ManualEdit` | Explicit user correction |
+| `account_upserted` | Chart of accounts change (Phase 2) |
+| `posted` | Balanced transaction accepted (Phase 2) |
+| `imported` | New batch from adapter |
+| `normalized` | Merchant/date/amount normalization |
+| `deduped` | Linked duplicate → survivor |
+| `categorized` | Rule applied |
+| `reconciled` | Statement proof produced |
+| `manual_edit` | Explicit user correction |
 
 ## ID strategy
 

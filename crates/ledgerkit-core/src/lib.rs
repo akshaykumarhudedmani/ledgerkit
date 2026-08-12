@@ -23,4 +23,6 @@ pub use ids::{CategoryId, ImportBatchId, MerchantId, TransactionId};
 pub use money::{Amount, Commodity, Money};
 pub use posting::Posting;
 pub use transaction::Transaction;
-pub use verify::{verify_ledger, verify_transaction, LedgerSnapshot, VerifyReport};
+pub use verify::{
+    account_balance, verify_ledger, verify_transaction, LedgerSnapshot, VerifyReport,
+};

@@ -2,15 +2,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
-use ledgerkit_core::{verify_ledger, LedgerSnapshot};
+use ledgerkit_core::{
+    account_balance, verify_ledger, Account, AccountId, AccountType, Amount, Commodity, Posting,
+    Transaction,
+};
 use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
 use ledgerkit_store::Store;
 
 #[derive(Parser, Debug)]
 #[command(name = "ledgerkit")]
-#[command(about = "Local-first bank export → auditable double-entry ledger engine", long_about = None)]
+#[command(
+    about = "Local-first bank export → auditable double-entry ledger engine",
+    long_about = None
+)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -21,6 +28,32 @@ struct Cli {
 enum Commands {
     /// Create a new LedgerKit workspace in the current directory
     Init {
+        #[arg(long, default_value = ".ledgerkit")]
+        dir: PathBuf,
+    },
+    /// Manage chart of accounts
+    Account {
+        #[command(subcommand)]
+        action: AccountCmd,
+    },
+    /// Post balanced transactions
+    Tx {
+        #[command(subcommand)]
+        action: TxCmd,
+    },
+    /// Show account balance from postings
+    Balance {
+        #[arg(long)]
+        account: String,
+        #[arg(long, default_value = "INR")]
+        commodity: String,
+        #[arg(long, default_value = ".ledgerkit")]
+        dir: PathBuf,
+    },
+    /// Replay event log and print ledger hash (optional --through SEQ)
+    Replay {
+        #[arg(long)]
+        through: Option<u64>,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -68,13 +101,47 @@ enum Commands {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Verify ledger invariants and checksums
+    /// Verify ledger invariants, event chain, and replay hash
     Verify {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
     /// List built-in adapters
     Adapters,
+}
+
+#[derive(Subcommand, Debug)]
+enum AccountCmd {
+    /// Upsert an account into the chart of accounts
+    Add {
+        #[arg(long)]
+        id: String,
+        #[arg(long = "type")]
+        account_type: String,
+        #[arg(long, default_value = "INR")]
+        commodity: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long, default_value = ".ledgerkit")]
+        dir: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TxCmd {
+    /// Post a balanced transaction
+    ///
+    /// Posting format: account=amount:commodity  (amount signed; at least two required)
+    Add {
+        #[arg(long)]
+        date: String,
+        #[arg(long)]
+        payee: String,
+        #[arg(long = "posting", required = true)]
+        postings: Vec<String>,
+        #[arg(long, default_value = ".ledgerkit")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -89,6 +156,29 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Init { dir } => cmd_init(&dir),
+        Commands::Account { action } => match action {
+            AccountCmd::Add {
+                id,
+                account_type,
+                commodity,
+                name,
+                dir,
+            } => cmd_account_add(&dir, &id, &account_type, &commodity, name.as_deref()),
+        },
+        Commands::Tx { action } => match action {
+            TxCmd::Add {
+                date,
+                payee,
+                postings,
+                dir,
+            } => cmd_tx_add(&dir, &date, &payee, &postings),
+        },
+        Commands::Balance {
+            account,
+            commodity,
+            dir,
+        } => cmd_balance(&dir, &account, &commodity),
+        Commands::Replay { through, dir } => cmd_replay(&dir, through),
         Commands::Import {
             path,
             account,
@@ -174,6 +264,114 @@ fn cmd_init(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn parse_account_type(s: &str) -> Result<AccountType> {
+    Ok(match s.to_ascii_lowercase().as_str() {
+        "asset" | "assets" => AccountType::Asset,
+        "liability" | "liabilities" => AccountType::Liability,
+        "equity" => AccountType::Equity,
+        "income" => AccountType::Income,
+        "expense" | "expenses" => AccountType::Expense,
+        other => bail!("unknown account type '{other}' (asset|liability|equity|income|expense)"),
+    })
+}
+
+fn cmd_account_add(
+    dir: &Path,
+    id: &str,
+    account_type: &str,
+    commodity: &str,
+    name: Option<&str>,
+) -> Result<()> {
+    ensure_workspace(dir)?;
+    let mut store = Store::open(db_path(dir))?;
+    let account_id = AccountId::new(id)?;
+    let account = Account::new(
+        account_id.clone(),
+        parse_account_type(account_type)?,
+        Commodity::new(commodity)?,
+        name.unwrap_or(id),
+    );
+    let event = store.upsert_account(account)?;
+    println!(
+        "account upserted id={} event_seq={} hash={}",
+        account_id, event.seq, event.content_hash
+    );
+    Ok(())
+}
+
+fn parse_posting(spec: &str) -> Result<Posting> {
+    // account=amount:commodity
+    let (account, rest) = spec
+        .split_once('=')
+        .with_context(|| format!("invalid posting '{spec}' (want account=amount:commodity)"))?;
+    let (amount, commodity) = rest
+        .rsplit_once(':')
+        .with_context(|| format!("invalid posting '{spec}' (want account=amount:commodity)"))?;
+    Ok(Posting::new(
+        AccountId::new(account.trim())?,
+        Amount::parse(amount.trim())?,
+        Commodity::new(commodity.trim())?,
+    ))
+}
+
+fn cmd_tx_add(dir: &Path, date: &str, payee: &str, posting_specs: &[String]) -> Result<()> {
+    ensure_workspace(dir)?;
+    let mut store = Store::open(db_path(dir))?;
+    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .with_context(|| format!("invalid date '{date}' (want YYYY-MM-DD)"))?;
+    let mut postings = Vec::new();
+    for spec in posting_specs {
+        postings.push(parse_posting(spec)?);
+    }
+    let tx = Transaction::new(date, payee, postings)?;
+    let event = store.post_transaction(tx.clone())?;
+    println!(
+        "posted tx={} event_seq={} postings={} hash={}",
+        tx.id,
+        event.seq,
+        tx.postings.len(),
+        event.content_hash
+    );
+    Ok(())
+}
+
+fn cmd_balance(dir: &Path, account: &str, commodity: &str) -> Result<()> {
+    ensure_workspace(dir)?;
+    let store = Store::open(db_path(dir))?;
+    let account_id = AccountId::new(account)?;
+    let commodity = Commodity::new(commodity)?;
+    let snapshot = store.load_snapshot()?;
+    let bal = account_balance(&snapshot, &account_id, &commodity);
+    println!("{account_id} {bal} {commodity}");
+    Ok(())
+}
+
+fn cmd_replay(dir: &Path, through: Option<u64>) -> Result<()> {
+    ensure_workspace(dir)?;
+    let store = Store::open(db_path(dir))?;
+    store.verify_event_chain()?;
+    let snapshot = match through {
+        Some(seq) => store.replay_through(seq)?,
+        None => store.replay_all()?,
+    };
+    let report = verify_ledger(&snapshot);
+    println!(
+        "replay through={} transactions={} ledger_hash={}",
+        through
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "all".into()),
+        report.transaction_count,
+        report.ledger_hash
+    );
+    if !report.ok {
+        for u in &report.unbalanced {
+            println!("  unbalanced: {u}");
+        }
+        bail!("replay verify failed");
+    }
+    Ok(())
+}
+
 fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Result<()> {
     ensure_workspace(dir)?;
     let _store = Store::open(db_path(dir))?;
@@ -182,7 +380,6 @@ fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Resul
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     let (raw, report) = adapter.parse(&bytes)?;
 
-    // Preserve original artifact with checksum (security + audit).
     let hash = ledgerkit_core::ContentHash::sha256_bytes(&bytes);
     let artifact =
         dir.join("artifacts")
@@ -215,9 +412,8 @@ fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Resul
 
 fn cmd_export(dir: &Path, format: &str, out: &Path) -> Result<()> {
     ensure_workspace(dir)?;
-    let _store = Store::open(db_path(dir))?;
-    // Phase 2 wires store → snapshot; empty snapshot is valid today.
-    let snapshot = LedgerSnapshot::default();
+    let store = Store::open(db_path(dir))?;
+    let snapshot = store.load_snapshot()?;
     let body = match format {
         "json" => JsonExporter.export(&snapshot)?,
         "beancount" | "bean" => BeancountExporter.export(&snapshot)?,
@@ -227,26 +423,32 @@ fn cmd_export(dir: &Path, format: &str, out: &Path) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::write(out, body)?;
-    println!("wrote {}", out.display());
+    println!(
+        "wrote {} ({} transactions)",
+        out.display(),
+        snapshot.transactions.len()
+    );
     Ok(())
 }
 
 fn cmd_verify(dir: &Path) -> Result<()> {
     ensure_workspace(dir)?;
     let store = Store::open(db_path(dir))?;
-    let snapshot = LedgerSnapshot::default();
-    let report = verify_ledger(&snapshot);
+    let tip = store.verify_event_chain()?;
+    let (mat, rep) = store.assert_replay_matches_materialized()?;
     println!("workspace={}", dir.display());
     println!("schema_version={}", store.schema_version()?);
     println!("events={}", store.event_count()?);
-    println!("transactions={}", report.transaction_count);
-    println!("postings={}", report.posting_count);
-    println!("ledger_hash={}", report.ledger_hash);
-    if report.ok {
+    println!("transactions={}", store.transaction_count()?);
+    println!("postings={}", store.posting_count()?);
+    println!("event_tip_hash={tip}");
+    println!("ledger_hash={}", mat.ledger_hash);
+    println!("replay_hash={}", rep.ledger_hash);
+    if mat.ok && mat.ledger_hash == rep.ledger_hash {
         println!("verify: OK");
         Ok(())
     } else {
-        for u in &report.unbalanced {
+        for u in &mat.unbalanced {
             println!("  unbalanced: {u}");
         }
         bail!("verify: FAILED");

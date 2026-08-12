@@ -14,6 +14,13 @@ pub struct LedgerSnapshot {
     pub transactions: Vec<Transaction>,
 }
 
+impl LedgerSnapshot {
+    /// Stable content hash used for replay equality checks.
+    pub fn content_hash(&self) -> ContentHash {
+        verify_ledger(self).ledger_hash
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerifyReport {
     pub ok: bool,
@@ -70,7 +77,13 @@ pub fn verify_ledger(snapshot: &LedgerSnapshot) -> VerifyReport {
         }
     }
 
-    let canonical = serde_json::to_vec(&snapshot.transactions).unwrap_or_default();
+    let mut ordered = snapshot.transactions.clone();
+    ordered.sort_by(|a, b| {
+        a.date
+            .cmp(&b.date)
+            .then_with(|| a.id.to_string().cmp(&b.id.to_string()))
+    });
+    let canonical = serde_json::to_vec(&ordered).unwrap_or_default();
     let ledger_hash = ContentHash::sha256_bytes(&canonical);
 
     VerifyReport {
