@@ -1,4 +1,7 @@
-use ledgerkit_core::{AccountId, Amount, Commodity, ImportBatchId, Posting, Transaction};
+use chrono::NaiveDate;
+use ledgerkit_core::{
+    AccountId, Amount, Commodity, ImportBatchId, Posting, Transaction, TransactionId,
+};
 
 use crate::dates::parse_date;
 use crate::normalize::normalize_merchant;
@@ -16,6 +19,28 @@ pub struct ConvertOptions {
 pub struct ConvertReport {
     pub transactions: Vec<Transaction>,
     pub errors: Vec<String>,
+    /// Parallel to `raw.transactions`: Ok(tx) or Err(message).
+    pub row_outcomes: Vec<Result<Transaction, String>>,
+}
+
+/// Canonical import identity. No wall-clock, no batch id.
+pub fn row_fingerprint(
+    adapter: &str,
+    account: &str,
+    date: NaiveDate,
+    amount: Amount,
+    commodity: &Commodity,
+    source_refs: &[String],
+    canonical_merchant: &str,
+) -> String {
+    let mut refs = source_refs.to_vec();
+    refs.sort();
+    format!(
+        "v1|{adapter}|{account}|{date}|{}|{}|{}|{canonical_merchant}",
+        amount.canonical_string(),
+        commodity.as_str(),
+        refs.join("\u{1f}"),
+    )
 }
 
 /// Turn adapter output into balanced double-entry transactions.
@@ -23,9 +48,16 @@ pub struct ConvertReport {
 pub fn convert_raw(raw: &RawTransactions, opts: &ConvertOptions) -> ConvertReport {
     let mut report = ConvertReport::default();
     for row in &raw.transactions {
-        match convert_one(row, opts) {
-            Ok(tx) => report.transactions.push(tx),
-            Err(err) => report.errors.push(format!("row {}: {err}", row.row_number)),
+        match convert_one(row, raw.adapter_id.as_str(), opts) {
+            Ok(tx) => {
+                report.row_outcomes.push(Ok(tx.clone()));
+                report.transactions.push(tx);
+            }
+            Err(err) => {
+                let msg = format!("row {}: {err}", row.row_number);
+                report.row_outcomes.push(Err(err));
+                report.errors.push(msg);
+            }
         }
     }
     report
@@ -33,6 +65,7 @@ pub fn convert_raw(raw: &RawTransactions, opts: &ConvertOptions) -> ConvertRepor
 
 fn convert_one(
     row: &crate::raw::RawTransaction,
+    adapter: &str,
     opts: &ConvertOptions,
 ) -> Result<Transaction, String> {
     let date = parse_date(&row.date_raw).map_err(|e| e.to_string())?;
@@ -57,6 +90,16 @@ fn convert_one(
         .checked_neg()
         .ok_or_else(|| "amount negation overflow".to_string())?;
 
+    let fp = row_fingerprint(
+        adapter,
+        opts.bank_account.as_str(),
+        date,
+        amount,
+        &commodity,
+        &row.source_refs,
+        &merchant.canonical_key,
+    );
+
     let mut tx = Transaction::new(
         date,
         row.description_raw.trim(),
@@ -67,6 +110,8 @@ fn convert_one(
         ],
     )
     .map_err(|e| e.to_string())?;
+    tx.id = TransactionId::from_fingerprint(&fp);
+    tx.row_fingerprint = Some(fp);
     tx.import_batch_id = Some(opts.import_batch_id);
     tx.narration = Some(merchant.canonical_key);
     Ok(tx)
@@ -77,9 +122,18 @@ mod tests {
     use super::*;
     use crate::raw::RawTransaction;
 
-    #[test]
-    fn withdrawal_hits_expense_offset() {
-        let raw = RawTransactions {
+    fn opts() -> ConvertOptions {
+        ConvertOptions {
+            bank_account: AccountId::new("assets:bank:checking").unwrap(),
+            expense_account: AccountId::new("expenses:uncategorized").unwrap(),
+            income_account: AccountId::new("income:uncategorized").unwrap(),
+            default_commodity: Commodity::new("USD").unwrap(),
+            import_batch_id: ImportBatchId::new(),
+        }
+    }
+
+    fn amazon_raw() -> RawTransactions {
+        RawTransactions {
             adapter_id: "generic_csv".into(),
             transactions: vec![RawTransaction {
                 row_number: 2,
@@ -90,15 +144,12 @@ mod tests {
                 balance_raw: None,
                 source_refs: vec!["generic:row:2".into()],
             }],
-        };
-        let opts = ConvertOptions {
-            bank_account: AccountId::new("assets:bank:checking").unwrap(),
-            expense_account: AccountId::new("expenses:uncategorized").unwrap(),
-            income_account: AccountId::new("income:uncategorized").unwrap(),
-            default_commodity: Commodity::new("USD").unwrap(),
-            import_batch_id: ImportBatchId::new(),
-        };
-        let report = convert_raw(&raw, &opts);
+        }
+    }
+
+    #[test]
+    fn withdrawal_hits_expense_offset() {
+        let report = convert_raw(&amazon_raw(), &opts());
         assert!(report.errors.is_empty());
         assert_eq!(report.transactions.len(), 1);
         let tx = &report.transactions[0];
@@ -106,6 +157,31 @@ mod tests {
         assert_eq!(tx.postings[0].amount.to_string(), "-42.15");
         assert_eq!(tx.postings[1].account.as_str(), "expenses:uncategorized");
         assert_eq!(tx.narration.as_deref(), Some("amzn_mktp_us"));
+        assert!(tx.row_fingerprint.as_ref().unwrap().starts_with("v1|"));
+    }
+
+    #[test]
+    fn same_row_yields_same_id_across_batches() {
+        let a = convert_raw(&amazon_raw(), &opts());
+        let b = convert_raw(&amazon_raw(), &opts());
+        assert_eq!(a.transactions[0].id, b.transactions[0].id);
+        assert_eq!(
+            a.transactions[0].row_fingerprint,
+            b.transactions[0].row_fingerprint
+        );
+        assert_ne!(
+            a.transactions[0].import_batch_id,
+            b.transactions[0].import_batch_id
+        );
+    }
+
+    #[test]
+    fn distinct_source_refs_get_distinct_ids() {
+        let mut raw = amazon_raw();
+        raw.transactions[0].source_refs = vec!["generic:row:9".into()];
+        let a = convert_raw(&amazon_raw(), &opts());
+        let b = convert_raw(&raw, &opts());
+        assert_ne!(a.transactions[0].id, b.transactions[0].id);
     }
 
     #[test]
@@ -122,15 +198,19 @@ mod tests {
                 source_refs: vec![],
             }],
         };
-        let opts = ConvertOptions {
-            bank_account: AccountId::new("assets:bank").unwrap(),
-            expense_account: AccountId::new("expenses:uncategorized").unwrap(),
-            income_account: AccountId::new("income:uncategorized").unwrap(),
-            default_commodity: Commodity::new("INR").unwrap(),
-            import_batch_id: ImportBatchId::new(),
-        };
-        let report = convert_raw(&raw, &opts);
+        let report = convert_raw(
+            &raw,
+            &ConvertOptions {
+                bank_account: AccountId::new("assets:bank").unwrap(),
+                expense_account: AccountId::new("expenses:uncategorized").unwrap(),
+                income_account: AccountId::new("income:uncategorized").unwrap(),
+                default_commodity: Commodity::new("INR").unwrap(),
+                import_batch_id: ImportBatchId::new(),
+            },
+        );
         assert_eq!(report.transactions.len(), 0);
         assert_eq!(report.errors.len(), 1);
+        assert_eq!(report.row_outcomes.len(), 1);
+        assert!(report.row_outcomes[0].is_err());
     }
 }

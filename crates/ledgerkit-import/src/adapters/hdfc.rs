@@ -65,6 +65,12 @@ pub(crate) fn parse_simple_csv<F>(
 where
     F: FnMut(usize, &[String], &csv::StringRecord) -> Result<RawTransaction, AdapterError>,
 {
+    if bytes.len() > crate::adapter::MAX_IMPORT_BYTES {
+        return Err(AdapterError::Schema(format!(
+            "file exceeds {} bytes",
+            crate::adapter::MAX_IMPORT_BYTES
+        )));
+    }
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .trim(csv::Trim::All)
@@ -155,5 +161,13 @@ mod tests {
         assert_eq!(raw.transactions.len(), 3);
         assert_eq!(raw.transactions[0].amount_raw, "1299.00");
         assert_eq!(raw.transactions[1].amount_raw, "-1299.00");
+    }
+
+    #[test]
+    fn hdfc_missing_amount_is_reported() {
+        let csv = b"Date,Narration,Withdrawal Amt.,Deposit Amt.\n01/02/26,NOPE,,\n";
+        let (raw, report) = HdfcCsvAdapter.parse(csv).unwrap();
+        assert_eq!(raw.transactions.len(), 0);
+        assert_eq!(report.error_rows, 1);
     }
 }

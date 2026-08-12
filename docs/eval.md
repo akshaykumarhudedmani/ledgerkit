@@ -17,12 +17,14 @@ Money amounts never use `f32`/`f64`. Metric ratios (precision/recall) are the on
 
 ## 2. Dedup (labeled)
 
-Fixture: 4 pairs (exact same merchant, near-window Netflix, different merchants, different amounts).
+Fixture: 4 JSON pairs plus 48 generated CAFE/SHOP pairs (52 labeled cases).
 
 | Metric | Result (this repo) |
 |--------|-------------------|
-| Precision | **1.00** (0 false positives) |
-| Recall | **1.00** (0 false negatives) |
+| Precision | **1.00** on this synthetic set (0 false positives) |
+| Recall | **1.00** on this synthetic set |
+
+This is **not** a bank corpus. Do not cite 1.00 as production-statement quality.
 
 Policy: exact fingerprint includes source refs; same-day distinct import rows are not merged; duplicates are linked with `duplicate_of`, never deleted.
 
@@ -61,8 +63,9 @@ Demo workspace after import + duplicate Starbucks + dedupe:
 - Stated ending 2409.20 as-of 2026-01-07
 - Unexplained delta **0**
 - Proof: `.demo/reports/reconcile-assets_bank_checking-2026-01-07.md`
+- Row-level: `ledgerkit reconcile --account assets:bank:checking --rows`
 
-Success rate on the checked-in demo statement: **1 / 1**. Broader N-statement rates need user CSVs (not committed).
+Ending-balance success rate on the checked-in demo statement: **1 / 1**. Row recon is fixture-backed in unit tests, not a multi-bank corpus.
 
 ## 6. Import latency (100k rows)
 
@@ -76,7 +79,7 @@ Sample (debug, this workspace): parse_100k_ms ≈ **514**, convert_100k_ms ≈ *
 
 ## 7. Path traversal
 
-Export `--out` rejects any `..` component (`crates/ledgerkit-cli/src/paths.rs`). Reconcile proofs already write only under `reports/` with a sanitized filename.
+Export `--out` rejects any `..` component (`crates/ledgerkit-cli/src/paths.rs`). Reconcile proofs already write only under `reports/` with a sanitized filename. Import rejects files larger than **32 MiB**.
 
 ## 8. Limits / non-claims
 

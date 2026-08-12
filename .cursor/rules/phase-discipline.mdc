@@ -5,17 +5,13 @@ alwaysApply: true
 
 # Phase discipline
 
-Follow `docs/roadmap.md`. Do not pull later-phase work into the current phase.
+Follow `docs/roadmap.md` and `docs/final.md`. Do not invent a v2.
 
 | Phase | Focus |
 |-------|--------|
-| 2 | Persist postings, event append/replay, real `verify` |
-| 3 | Import → ledger write, adapters, golden fixtures |
-| 4 | Dedupe + rules DSL + metrics |
-| 5 | Reconcile proofs + `why` |
-| 6 | Beancount polish + demo |
-| 7 | Fuzz, benches, eval chapter |
+| 1–7 | Shipped on `master` |
+| Final | Identity, statement rows, row recon, rebuild, hygiene — then **stop** |
 
-**Out of scope for v1:** mobile UI, budgeting UI, PDF/OCR spine, tax, multi-user sync, “AI categorizes everything”.
+**Out of scope forever:** mobile UI, budgeting UI, PDF/OCR, tax, multi-user sync, “AI categorizes everything”, live bank APIs, extra crate splits.
 
 Prefer failing tests and design-doc updates over new product surfaces.
