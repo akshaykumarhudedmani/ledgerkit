@@ -117,12 +117,14 @@ Each event stores:
 
 - monotonic `seq`
 - payload JSON
-- `content_hash` of canonical payload
+- `content_hash` of canonical payload (chained with `prev_hash`, id, at, kind)
 - `prev_hash` forming a hash chain
 
-**Replay invariant:** folding events `0..=N` always rebuilds the same ledger content hash.
+Phase 2 event kinds used for ledger core: `account_upserted`, `posted`.
 
-**`ledgerkit why <tx_id>`:** walks events referencing that transaction and prints the derivation chain.
+**Replay invariant:** folding `Posted` events `0..=N` always rebuilds the same ledger content hash as the materialized tables.
+
+**`ledgerkit why <tx_id>`:** walks events referencing that transaction (Phase 5).
 
 ---
 

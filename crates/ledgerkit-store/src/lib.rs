@@ -1,8 +1,9 @@
-//! SQLite-backed append-only event store.
-//!
-//! Phase 1 ships schema + open/append/replay stubs. Full event chaining lands in Phase 2.
+//! SQLite-backed append-only event store and materialized ledger.
 
 mod db;
+mod events;
+mod ledger;
+mod replay;
 mod schema;
 
 pub use db::Store;

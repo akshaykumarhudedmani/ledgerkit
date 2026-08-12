@@ -15,12 +15,18 @@ if (Test-Path $Demo) { Remove-Item -Recurse -Force $Demo }
 Write-Host "==> init"
 cargo run -p ledgerkit-cli -- init --dir .demo
 
-Write-Host "==> import generic sample"
-cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv `
-  --account assets:bank:checking --adapter generic_csv --dir .demo
+Write-Host "==> chart of accounts"
+cargo run -p ledgerkit-cli -- account add --id assets:cash --type asset --commodity INR --name Cash --dir .demo
+cargo run -p ledgerkit-cli -- account add --id expenses:food --type expense --commodity INR --name Food --dir .demo
 
-Write-Host "==> verify"
+Write-Host "==> post balanced transaction"
+cargo run -p ledgerkit-cli -- tx add --date 2026-03-01 --payee Cafe `
+  --posting "assets:cash=-250.00:INR" --posting "expenses:food=250.00:INR" --dir .demo
+
+Write-Host "==> balance + verify + replay"
+cargo run -p ledgerkit-cli -- balance --account assets:cash --commodity INR --dir .demo
 cargo run -p ledgerkit-cli -- verify --dir .demo
+cargo run -p ledgerkit-cli -- replay --dir .demo
 
 Write-Host "==> export beancount"
 cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo

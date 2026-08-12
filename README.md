@@ -30,12 +30,15 @@ Bank CSV  →  adapters  →  normalize / dedupe / rules  →  double-entry ledg
 cargo build -p ledgerkit-cli
 cargo test --workspace
 
-# one-command demo
+# Phase 2 ledger demo
 cargo run -p ledgerkit-cli -- init --dir .demo
-cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
-  --account assets:bank:checking --adapter generic_csv --dir .demo
+cargo run -p ledgerkit-cli -- account add --id assets:cash --type asset --commodity INR --dir .demo
+cargo run -p ledgerkit-cli -- account add --id expenses:food --type expense --commodity INR --dir .demo
+cargo run -p ledgerkit-cli -- tx add --date 2026-03-01 --payee Cafe \
+  --posting assets:cash=-250.00:INR --posting expenses:food=250.00:INR --dir .demo
+cargo run -p ledgerkit-cli -- balance --account assets:cash --dir .demo
 cargo run -p ledgerkit-cli -- verify --dir .demo
-cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
+cargo run -p ledgerkit-cli -- replay --dir .demo
 ```
 
 On Windows PowerShell:
@@ -48,13 +51,18 @@ On Windows PowerShell:
 
 ```text
 ledgerkit init
+ledgerkit account add --id assets:bank:hdfc --type asset --commodity INR
+ledgerkit tx add --date 2026-03-01 --payee Cafe \
+  --posting assets:bank:hdfc=-250:INR --posting expenses:food=250:INR
+ledgerkit balance --account assets:bank:hdfc
+ledgerkit verify
+ledgerkit replay [--through N]
 ledgerkit import ./statement.csv --account assets:bank:hdfc --adapter hdfc
 ledgerkit rules apply
 ledgerkit dedupe
 ledgerkit reconcile --balance 12345.67 --as-of 2026-03-31
 ledgerkit why tx_…
 ledgerkit export --format beancount --out ledger.bean
-ledgerkit verify
 ledgerkit adapters
 ```
 
@@ -87,7 +95,7 @@ fixtures/             # anonymized sample CSVs + golden outputs
 
 ## Status
 
-**Phase 1 (Spec + skeleton):** in progress — design docs, schema, core invariants, CLI stubs, CI.
+**Phase 2 (Ledger core):** done — SQLite persistence, sealed event chain, replay hash equality, real `verify` / `balance` / `tx add`.
 
 See [docs/roadmap.md](docs/roadmap.md) and [docs/design.md](docs/design.md).
 

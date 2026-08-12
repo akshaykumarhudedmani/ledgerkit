@@ -6,6 +6,7 @@ Cargo.lock.bak
 # LedgerKit local data
 /.ledgerkit/
 /.demo/
+.demo2/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

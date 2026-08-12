@@ -8,7 +8,7 @@ use crate::schema::{SCHEMA_SQL, SCHEMA_VERSION};
 /// Local LedgerKit workspace store (SQLite).
 pub struct Store {
     path: PathBuf,
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Store {
@@ -56,6 +56,20 @@ impl Store {
         let n: i64 = self
             .conn
             .query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))?;
+        Ok(n as u64)
+    }
+
+    pub fn transaction_count(&self) -> Result<u64> {
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM transactions", [], |row| row.get(0))?;
+        Ok(n as u64)
+    }
+
+    pub fn posting_count(&self) -> Result<u64> {
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM postings", [], |row| row.get(0))?;
         Ok(n as u64)
     }
 }
