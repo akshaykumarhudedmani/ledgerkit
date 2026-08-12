@@ -15,16 +15,20 @@ if (Test-Path $Demo) { Remove-Item -Recurse -Force $Demo }
 Write-Host "==> init"
 cargo run -p ledgerkit-cli -- init --dir .demo
 
-Write-Host "==> chart of accounts"
-cargo run -p ledgerkit-cli -- account add --id assets:cash --type asset --commodity INR --name Cash --dir .demo
-cargo run -p ledgerkit-cli -- account add --id expenses:food --type expense --commodity INR --name Food --dir .demo
+Write-Host "==> import generic CSV (writes ledger + event log)"
+cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv `
+  --account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
 
-Write-Host "==> post balanced transaction"
-cargo run -p ledgerkit-cli -- tx add --date 2026-03-01 --payee Cafe `
-  --posting "assets:cash=-250.00:INR" --posting "expenses:food=250.00:INR" --dir .demo
+Write-Host "==> import same file again (idempotent)"
+cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv `
+  --account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
+
+Write-Host "==> import HDFC sample"
+cargo run -p ledgerkit-cli -- import fixtures/csv/hdfc/sample.csv `
+  --account assets:bank:hdfc --adapter hdfc --commodity INR --dir .demo
 
 Write-Host "==> balance + verify + replay"
-cargo run -p ledgerkit-cli -- balance --account assets:cash --commodity INR --dir .demo
+cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
 cargo run -p ledgerkit-cli -- verify --dir .demo
 cargo run -p ledgerkit-cli -- replay --dir .demo
 

@@ -5,7 +5,7 @@
 //! - Import artifacts store sha256 of original bytes.
 //! - Derived balances are never stored as source of truth.
 
-pub const SCHEMA_VERSION: i32 = 1;
+pub const SCHEMA_VERSION: i32 = 2;
 
 pub const SCHEMA_SQL: &str = r#"
 PRAGMA foreign_keys = ON;
@@ -82,4 +82,6 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_postings_account ON postings(account_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_import_batches_idempotent
+  ON import_batches(adapter, source_sha256, account_id);
 "#;

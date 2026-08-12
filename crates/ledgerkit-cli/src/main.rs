@@ -2,15 +2,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use ledgerkit_core::{
-    account_balance, verify_ledger, Account, AccountId, AccountType, Amount, Commodity, Posting,
-    Transaction,
+    account_balance, verify_ledger, Account, AccountId, AccountType, Amount, Commodity,
+    ImportBatchId, Posting, Transaction,
 };
 use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
-use ledgerkit_store::Store;
+use ledgerkit_import::{convert_raw, ConvertOptions};
+use ledgerkit_store::{ImportBatchSpec, ImportOutcome, Store};
 
 #[derive(Parser, Debug)]
 #[command(name = "ledgerkit")]
@@ -64,6 +65,12 @@ enum Commands {
         account: String,
         #[arg(long)]
         adapter: String,
+        #[arg(long, default_value = "expenses:uncategorized")]
+        offset_expense: String,
+        #[arg(long, default_value = "income:uncategorized")]
+        offset_income: String,
+        #[arg(long, default_value = "INR")]
+        commodity: String,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -183,8 +190,19 @@ fn main() -> Result<()> {
             path,
             account,
             adapter,
+            offset_expense,
+            offset_income,
+            commodity,
             dir,
-        } => cmd_import(&dir, &path, &account, &adapter),
+        } => cmd_import(
+            &dir,
+            &path,
+            &account,
+            &adapter,
+            &offset_expense,
+            &offset_income,
+            &commodity,
+        ),
         Commands::Rules { action } => match action {
             RulesCmd::Apply { dir } => {
                 ensure_workspace(&dir)?;
@@ -341,7 +359,7 @@ fn cmd_balance(dir: &Path, account: &str, commodity: &str) -> Result<()> {
     let account_id = AccountId::new(account)?;
     let commodity = Commodity::new(commodity)?;
     let snapshot = store.load_snapshot()?;
-    let bal = account_balance(&snapshot, &account_id, &commodity);
+    let bal = account_balance(&snapshot, &account_id, &commodity)?;
     println!("{account_id} {bal} {commodity}");
     Ok(())
 }
@@ -372,9 +390,17 @@ fn cmd_replay(dir: &Path, through: Option<u64>) -> Result<()> {
     Ok(())
 }
 
-fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Result<()> {
+fn cmd_import(
+    dir: &Path,
+    path: &Path,
+    account: &str,
+    adapter_id: &str,
+    offset_expense: &str,
+    offset_income: &str,
+    commodity: &str,
+) -> Result<()> {
     ensure_workspace(dir)?;
-    let _store = Store::open(db_path(dir))?;
+    let mut store = Store::open(db_path(dir))?;
     let adapter = adapters::builtin(adapter_id)
         .with_context(|| format!("unknown adapter '{adapter_id}' — try `ledgerkit adapters`"))?;
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
@@ -387,7 +413,7 @@ fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Resul
     fs::write(&artifact, &bytes)?;
 
     println!(
-        "imported {} via {} into account {account}",
+        "parsed {} via {} for account {account}",
         path.display(),
         adapter.name()
     );
@@ -398,15 +424,75 @@ fn cmd_import(dir: &Path, path: &Path, account: &str, adapter_id: &str) -> Resul
     println!("  source_sha256={hash}");
     println!("  artifact={}", artifact.display());
     if !report.errors.is_empty() {
-        println!("  row errors:");
+        println!("  parse errors:");
         for err in report.errors.iter().take(20) {
             println!("    - {err}");
         }
     }
-    println!(
-        "  parsed {} raw transactions (ledger write: Phase 3)",
-        raw.transactions.len()
+
+    let bank = AccountId::new(account)?;
+    let expense = AccountId::new(offset_expense)?;
+    let income = AccountId::new(offset_income)?;
+    let commodity = Commodity::new(commodity)?;
+    let batch_id = ImportBatchId::new();
+    let converted = convert_raw(
+        &raw,
+        &ConvertOptions {
+            bank_account: bank.clone(),
+            expense_account: expense.clone(),
+            income_account: income.clone(),
+            default_commodity: commodity.clone(),
+            import_batch_id: batch_id,
+        },
     );
+    if !converted.errors.is_empty() {
+        println!("  convert errors:");
+        for err in converted.errors.iter().take(20) {
+            println!("    - {err}");
+        }
+    }
+    if converted.transactions.is_empty() {
+        bail!(
+            "no transactions converted (parse ok_rows={}, convert errors={})",
+            report.ok_rows,
+            converted.errors.len()
+        );
+    }
+
+    let accounts = vec![
+        Account::new(bank.clone(), AccountType::Asset, commodity.clone(), account),
+        Account::new(
+            expense,
+            AccountType::Expense,
+            commodity.clone(),
+            offset_expense,
+        ),
+        Account::new(income, AccountType::Income, commodity, offset_income),
+    ];
+    let spec = ImportBatchSpec {
+        id: batch_id,
+        adapter: adapter.id().to_string(),
+        account_id: bank.to_string(),
+        source_path: path.display().to_string(),
+        source_sha256: hash,
+        imported_at: Utc::now(),
+        row_count: converted.transactions.len() as u64,
+    };
+    let posted_n = converted.transactions.len();
+    match store.apply_import(spec, accounts, converted.transactions)? {
+        ImportOutcome::Applied {
+            batch_id,
+            posted,
+            last_seq,
+        } => {
+            println!("  posted={posted} batch={batch_id} last_event_seq={last_seq}");
+        }
+        ImportOutcome::Duplicate { batch_id } => {
+            println!(
+                "  already imported (idempotent) batch={batch_id} (would have posted {posted_n})"
+            );
+        }
+    }
     Ok(())
 }
 
