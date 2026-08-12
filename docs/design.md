@@ -152,7 +152,7 @@ Success means unexplained delta == 0 within commodity scale.
 | Malformed CSV | Row errors in `ParseReport`; import continues for good rows |
 | Unbalanced txn | Rejected at construction; `verify` fails CI |
 | Corrupt SQLite | Open fails loudly; no silent repair of event hashes |
-| Path traversal in export paths | Rejected (Phase 7 tests) |
+| Path traversal in export paths | Rejected (`reject_parent_dir`; unit tests) |
 | Float coercion attempt | Type system prevents floats in money APIs |
 
 ---
@@ -171,8 +171,8 @@ Success means unexplained delta == 0 within commodity scale.
 1. Unit tests for parsers, money, verify.
 2. Property tests: random balanced transfers always verify; replay hash stability.
 3. Golden fixtures under `fixtures/`.
-4. Fuzz malformed CSV (Phase 7).
-5. Benchmarks: 100k-row import (Phase 7).
+4. Fuzz malformed CSV (`crates/ledgerkit-import/tests/fuzz_adapters.rs`).
+5. Benchmarks: 100k-row import (`scripts/bench.ps1`, ignored in default CI).
 
 ---
 

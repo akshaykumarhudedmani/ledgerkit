@@ -1,3 +1,5 @@
+mod paths;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -644,6 +646,7 @@ fn cmd_import(
 
 fn cmd_export(dir: &Path, format: &str, out: &Path) -> Result<()> {
     ensure_workspace(dir)?;
+    paths::reject_parent_dir(out)?;
     let store = Store::open(db_path(dir))?;
     let snapshot = store.load_snapshot()?;
     let exported = snapshot

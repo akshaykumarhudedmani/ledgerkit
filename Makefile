@@ -14,6 +14,9 @@ fmt:
 clippy:
 	cargo clippy --workspace --all-targets -- -D warnings
 
+bench:
+	cargo test -p ledgerkit-import --release --test scale -- --ignored --nocapture
+
 demo: build
 	cargo run -p ledgerkit-cli -- init --dir .demo
 	cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
