@@ -8,7 +8,7 @@ use ledgerkit_core::{
     account_balance, prove_reconcile, verify_ledger, Account, AccountId, AccountType, Amount,
     Commodity, ImportBatchId, Posting, ReconcileRequest, Transaction, TransactionId,
 };
-use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
+use ledgerkit_export::{BeancountExporter, CsvExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
 use ledgerkit_import::{
     apply_rules, convert_raw, plan_dedupe, ConvertOptions, DedupeOptions, RuleSet,
@@ -110,7 +110,7 @@ enum Commands {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Export ledger to a target format
+    /// Export ledger to json, beancount, or csv (duplicates omitted)
     Export {
         #[arg(long, default_value = "json")]
         format: String,
@@ -646,19 +646,25 @@ fn cmd_export(dir: &Path, format: &str, out: &Path) -> Result<()> {
     ensure_workspace(dir)?;
     let store = Store::open(db_path(dir))?;
     let snapshot = store.load_snapshot()?;
+    let exported = snapshot
+        .transactions
+        .iter()
+        .filter(|t| t.duplicate_of.is_none())
+        .count();
     let body = match format {
         "json" => JsonExporter.export(&snapshot)?,
         "beancount" | "bean" => BeancountExporter.export(&snapshot)?,
-        other => bail!("unsupported format '{other}' (json|beancount)"),
+        "csv" => CsvExporter.export(&snapshot)?,
+        other => bail!("unsupported format '{other}' (json|beancount|csv)"),
     };
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent)?;
     }
     fs::write(out, body)?;
     println!(
-        "wrote {} ({} transactions)",
+        "wrote {} ({} transactions, duplicates omitted)",
         out.display(),
-        snapshot.transactions.len()
+        exported
     );
     Ok(())
 }
