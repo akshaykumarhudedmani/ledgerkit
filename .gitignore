@@ -1,0 +1,36 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# LedgerKit local data
+/.ledgerkit/
+/.demo/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env / secrets (none required, but never commit if present)
+.env
+.env.*
+!.env.example
+
+# Python helpers / notebooks (optional local use)
+__pycache__/
+.venv/
+venv/
+
+# Reports generated during demos
+/out/
+/reports/
+*.bean
+!fixtures/**/*.bean

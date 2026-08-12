@@ -1,0 +1,27 @@
+# CI
+
+.PHONY: test fmt clippy build demo verify-demo clean
+
+build:
+	cargo build --workspace
+
+test:
+	cargo test --workspace
+
+fmt:
+	cargo fmt --all
+
+clippy:
+	cargo clippy --workspace --all-targets -- -D warnings
+
+demo: build
+	cargo run -p ledgerkit-cli -- init --dir .demo
+	cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv --account assets:bank:checking --adapter generic_csv --dir .demo
+	cargo run -p ledgerkit-cli -- verify --dir .demo
+	cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
+
+verify-demo: demo
+
+clean:
+	cargo clean
+	rm -rf .demo .ledgerkit
