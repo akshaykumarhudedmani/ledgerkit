@@ -27,6 +27,12 @@ Write-Host "==> import HDFC sample"
 cargo run -p ledgerkit-cli -- import fixtures/csv/hdfc/sample.csv `
   --account assets:bank:hdfc --adapter hdfc --commodity INR --dir .demo
 
+Write-Host "==> inject exact duplicate + dedupe + rules"
+cargo run -p ledgerkit-cli -- tx add --date 2026-01-03 --payee "STARBUCKS STORE 12345" `
+  --posting "assets:bank:checking=-6.50:USD" --posting "expenses:uncategorized=6.50:USD" --dir .demo
+cargo run -p ledgerkit-cli -- dedupe --dir .demo
+cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
+
 Write-Host "==> balance + verify + replay"
 cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
 cargo run -p ledgerkit-cli -- verify --dir .demo

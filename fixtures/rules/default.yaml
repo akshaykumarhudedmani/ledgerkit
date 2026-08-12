@@ -1,0 +1,27 @@
+rules:
+  - id: amazon-shopping
+    priority: 20
+    category: expenses:shopping
+    merchant_regex: "(?i)amzn|amazon"
+    confidence: 90
+  - id: streaming
+    priority: 15
+    category: expenses:subscriptions
+    payee_regex: "(?i)netflix|spotify"
+    confidence: 85
+  - id: rides
+    priority: 15
+    category: expenses:transport
+    payee_regex: "(?i)uber|lyft"
+    confidence: 85
+  - id: coffee
+    priority: 10
+    category: expenses:food
+    payee_regex: "(?i)starbucks|cafe"
+    confidence: 80
+  - id: payroll
+    priority: 30
+    category: income:salary
+    payee_regex: "(?i)payroll|salary|neft cr-salary"
+    min_amount: "1000"
+    confidence: 95

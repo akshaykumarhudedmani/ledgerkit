@@ -10,7 +10,9 @@ use ledgerkit_core::{
 };
 use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
-use ledgerkit_import::{convert_raw, ConvertOptions};
+use ledgerkit_import::{
+    apply_rules, convert_raw, plan_dedupe, ConvertOptions, DedupeOptions, RuleSet,
+};
 use ledgerkit_store::{ImportBatchSpec, ImportOutcome, Store};
 
 #[derive(Parser, Debug)]
@@ -74,13 +76,15 @@ enum Commands {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Apply categorization rules (stub)
+    /// Apply YAML/JSON categorization rules (tags only; does not rewrite postings)
     Rules {
         #[command(subcommand)]
         action: RulesCmd,
     },
-    /// Run deduplication (stub)
+    /// Run deduplication (never deletes; sets duplicate_of)
     Dedupe {
+        #[arg(long, default_value_t = 1)]
+        window_days: i64,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -153,7 +157,10 @@ enum TxCmd {
 
 #[derive(Subcommand, Debug)]
 enum RulesCmd {
+    /// Tag matching transactions with `category:<account>` (skips duplicates / already tagged)
     Apply {
+        #[arg(long, default_value = "fixtures/rules/default.yaml")]
+        file: PathBuf,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -204,17 +211,9 @@ fn main() -> Result<()> {
             &commodity,
         ),
         Commands::Rules { action } => match action {
-            RulesCmd::Apply { dir } => {
-                ensure_workspace(&dir)?;
-                println!("rules apply: not implemented yet (Phase 4)");
-                Ok(())
-            }
+            RulesCmd::Apply { dir, file } => cmd_rules_apply(&dir, &file),
         },
-        Commands::Dedupe { dir } => {
-            ensure_workspace(&dir)?;
-            println!("dedupe: not implemented yet (Phase 4)");
-            Ok(())
-        }
+        Commands::Dedupe { dir, window_days } => cmd_dedupe(&dir, window_days),
         Commands::Reconcile {
             balance,
             as_of,
@@ -387,6 +386,66 @@ fn cmd_replay(dir: &Path, through: Option<u64>) -> Result<()> {
         }
         bail!("replay verify failed");
     }
+    Ok(())
+}
+
+fn cmd_dedupe(dir: &Path, window_days: i64) -> Result<()> {
+    ensure_workspace(dir)?;
+    let mut store = Store::open(db_path(dir))?;
+    let snapshot = store.load_snapshot()?;
+    let report = plan_dedupe(&snapshot.transactions, DedupeOptions { window_days });
+    println!(
+        "dedupe planned={} already_linked={}",
+        report.links.len(),
+        report.skipped_already_linked
+    );
+    for link in &report.links {
+        store.mark_duplicate(
+            link.duplicate_id,
+            link.survivor_id,
+            &link.strategy,
+            &link.explanation,
+        )?;
+        println!(
+            "  {} -> {} ({}) {}",
+            link.duplicate_id, link.survivor_id, link.strategy, link.explanation
+        );
+    }
+    store.assert_replay_matches_materialized()?;
+    Ok(())
+}
+
+fn cmd_rules_apply(dir: &Path, file: &Path) -> Result<()> {
+    ensure_workspace(dir)?;
+    let set = RuleSet::from_path(file).with_context(|| format!("load rules {}", file.display()))?;
+    let mut store = Store::open(db_path(dir))?;
+    let snapshot = store.load_snapshot()?;
+    let report = apply_rules(&snapshot.transactions, &set);
+    println!(
+        "rules file={} applied={} conflicts={} unmatched={} skipped={}",
+        file.display(),
+        report.applied.len(),
+        report.conflicts.len(),
+        report.unmatched,
+        report.skipped_already_categorized
+    );
+    for c in &report.conflicts {
+        println!("  conflict: {c}");
+    }
+    for m in report.applied {
+        store.apply_category(
+            m.transaction_id,
+            &m.category,
+            &m.rule_id,
+            m.confidence,
+            m.reasons.clone(),
+        )?;
+        println!(
+            "  {} => {} (rule {} conf {})",
+            m.transaction_id, m.category, m.rule_id, m.confidence
+        );
+    }
+    store.assert_replay_matches_materialized()?;
     Ok(())
 }
 

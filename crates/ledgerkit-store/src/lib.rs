@@ -4,6 +4,7 @@ mod db;
 mod events;
 mod import;
 mod ledger;
+mod mutate;
 mod replay;
 mod schema;
 

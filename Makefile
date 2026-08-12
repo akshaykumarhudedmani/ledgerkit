@@ -18,6 +18,8 @@ demo: build
 	cargo run -p ledgerkit-cli -- init --dir .demo
 	cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
 		--account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
+	cargo run -p ledgerkit-cli -- dedupe --dir .demo
+	cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
 	cargo run -p ledgerkit-cli -- verify --dir .demo
 	cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
 
