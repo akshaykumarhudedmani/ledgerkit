@@ -15,6 +15,10 @@ macro_rules! id_newtype {
             pub fn from_uuid(id: Uuid) -> Self {
                 Self(id)
             }
+
+            pub fn parse(s: &str) -> std::result::Result<Self, uuid::Error> {
+                Ok(Self(Uuid::parse_str(s.trim())?))
+            }
         }
 
         impl Default for $name {

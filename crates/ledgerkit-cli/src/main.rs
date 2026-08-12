@@ -5,8 +5,8 @@ use anyhow::{bail, Context, Result};
 use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use ledgerkit_core::{
-    account_balance, verify_ledger, Account, AccountId, AccountType, Amount, Commodity,
-    ImportBatchId, Posting, Transaction,
+    account_balance, prove_reconcile, verify_ledger, Account, AccountId, AccountType, Amount,
+    Commodity, ImportBatchId, Posting, ReconcileRequest, Transaction, TransactionId,
 };
 use ledgerkit_export::{BeancountExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
@@ -88,16 +88,23 @@ enum Commands {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Reconcile account to a statement ending balance (stub)
+    /// Reconcile an account to a statement ending balance and write a proof report
     Reconcile {
+        #[arg(long)]
+        account: String,
         #[arg(long)]
         balance: String,
         #[arg(long = "as-of")]
         as_of: String,
+        #[arg(long, default_value = "INR")]
+        commodity: String,
+        /// Optional opening balance (default 0; use when the ledger does not contain earlier history)
+        #[arg(long)]
+        starting: Option<String>,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Explain derivation chain for a transaction (stub)
+    /// Explain the event-log derivation chain for a transaction
     Why {
         tx_id: String,
         #[arg(long, default_value = ".ledgerkit")]
@@ -215,22 +222,21 @@ fn main() -> Result<()> {
         },
         Commands::Dedupe { dir, window_days } => cmd_dedupe(&dir, window_days),
         Commands::Reconcile {
+            account,
             balance,
             as_of,
+            commodity,
+            starting,
             dir,
-        } => {
-            ensure_workspace(&dir)?;
-            println!(
-                "reconcile: balance={balance} as_of={as_of} (Phase 5 stub — workspace ok at {})",
-                dir.display()
-            );
-            Ok(())
-        }
-        Commands::Why { tx_id, dir } => {
-            ensure_workspace(&dir)?;
-            println!("why {tx_id}: event chain not implemented yet (Phase 5)");
-            Ok(())
-        }
+        } => cmd_reconcile(
+            &dir,
+            &account,
+            &balance,
+            &as_of,
+            &commodity,
+            starting.as_deref(),
+        ),
+        Commands::Why { tx_id, dir } => cmd_why(&dir, &tx_id),
         Commands::Export { format, out, dir } => cmd_export(&dir, &format, &out),
         Commands::Verify { dir } => cmd_verify(&dir),
         Commands::Adapters => {
@@ -412,6 +418,87 @@ fn cmd_dedupe(dir: &Path, window_days: i64) -> Result<()> {
         );
     }
     store.assert_replay_matches_materialized()?;
+    Ok(())
+}
+
+fn proof_report_path(dir: &Path, filename: &str) -> Result<PathBuf> {
+    if filename.is_empty()
+        || filename.contains("..")
+        || filename.contains('/')
+        || filename.contains('\\')
+        || Path::new(filename).is_absolute()
+    {
+        bail!("refusing to write proof outside workspace reports/");
+    }
+    Ok(dir.join("reports").join(filename))
+}
+
+fn cmd_reconcile(
+    dir: &Path,
+    account: &str,
+    balance: &str,
+    as_of: &str,
+    commodity: &str,
+    starting: Option<&str>,
+) -> Result<()> {
+    ensure_workspace(dir)?;
+    let as_of_date = NaiveDate::parse_from_str(as_of, "%Y-%m-%d")
+        .with_context(|| format!("as-of must be YYYY-MM-DD, got {as_of}"))?;
+    let req = ReconcileRequest {
+        account: AccountId::new(account)?,
+        commodity: Commodity::new(commodity)?,
+        as_of: as_of_date,
+        stated_ending: Amount::parse(balance)?,
+        starting: match starting {
+            Some(s) => Amount::parse(s)?,
+            None => Amount::zero(),
+        },
+    };
+    let mut store = Store::open(db_path(dir))?;
+    let snapshot = store.load_snapshot()?;
+    let proof = prove_reconcile(&snapshot, &req)?;
+    let filename = proof.proof_filename();
+    let path = proof_report_path(dir, &filename)?;
+    fs::create_dir_all(dir.join("reports"))?;
+    fs::write(&path, proof.to_markdown())?;
+    let rel = format!("reports/{filename}");
+    let unmatched = proof.skipped_duplicates.len() + proof.after_as_of.len();
+    let event = store.record_reconcile(&proof, Some(rel.clone()))?;
+    store.assert_replay_matches_materialized()?;
+    println!(
+        "reconcile account={} as_of={} computed={} stated={} delta={} matched={} unmatched={} event_seq={} report={}",
+        proof.account,
+        proof.as_of,
+        proof.computed_ending,
+        proof.stated_ending,
+        proof.unexplained_delta,
+        proof.matched.len(),
+        unmatched,
+        event.seq,
+        path.display()
+    );
+    if !proof.ok() {
+        bail!(
+            "unexplained delta {} {} (see {})",
+            proof.unexplained_delta,
+            proof.commodity,
+            rel
+        );
+    }
+    println!("reconcile: OK");
+    Ok(())
+}
+
+fn cmd_why(dir: &Path, tx_id: &str) -> Result<()> {
+    ensure_workspace(dir)?;
+    let id =
+        TransactionId::parse(tx_id).with_context(|| format!("invalid transaction id {tx_id}"))?;
+    let store = Store::open(db_path(dir))?;
+    let steps = store.why_transaction(id)?;
+    println!("why {id} steps={}", steps.len());
+    for step in steps {
+        println!("  seq={} {}: {}", step.seq, step.kind, step.summary);
+    }
     Ok(())
 }
 

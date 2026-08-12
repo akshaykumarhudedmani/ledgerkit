@@ -33,6 +33,8 @@ Event (append-only log)
 | `transactions` / `postings` | double-entry journal |
 | `events` | append-only audit log |
 
+Proof markdown is written under the workspace `reports/` directory (created by `init`).
+
 Exact SQL: `crates/ledgerkit-store/src/schema.rs`.
 
 ## Event kinds

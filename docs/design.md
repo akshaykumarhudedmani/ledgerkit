@@ -124,7 +124,7 @@ Phase 2 event kinds used for ledger core: `account_upserted`, `posted`.
 
 **Replay invariant:** folding `Posted` events `0..=N` always rebuilds the same ledger content hash as the materialized tables.
 
-**`ledgerkit why <tx_id>`:** walks events referencing that transaction (Phase 5).
+**`ledgerkit why <tx_id>`:** walks events referencing that transaction.
 
 ---
 
