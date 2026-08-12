@@ -45,7 +45,8 @@ cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity
 cargo run -p ledgerkit-cli -- verify --dir .demo
 cargo run -p ledgerkit-cli -- replay --dir .demo
 
-Write-Host "==> export beancount"
+Write-Host "==> export beancount + csv"
 cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
+cargo run -p ledgerkit-cli -- export --format csv --out .demo/ledger.csv --dir .demo
 
 Write-Host "Demo OK. Workspace: $Demo"
