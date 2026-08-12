@@ -14,7 +14,7 @@ default-members = ["crates/ledgerkit-cli"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/PLACEHOLDER/ledgerkit"
+repository = "https://github.com/akshaykumarhudedmani/ledgerkit"
 authors = ["LedgerKit Contributors"]
 rust-version = "1.75"
 
