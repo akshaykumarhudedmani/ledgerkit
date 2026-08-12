@@ -100,7 +100,7 @@ pub fn account_balance(
     snapshot: &LedgerSnapshot,
     account: &AccountId,
     commodity: &Commodity,
-) -> Amount {
+) -> Result<Amount> {
     let mut total = Amount::zero();
     for tx in &snapshot.transactions {
         if tx.duplicate_of.is_some() {
@@ -108,13 +108,15 @@ pub fn account_balance(
         }
         for posting in &tx.postings {
             if &posting.account == account && &posting.commodity == commodity {
-                if let Some(next) = total.checked_add(posting.amount) {
-                    total = next;
-                }
+                total = total.checked_add(posting.amount).ok_or_else(|| {
+                    CoreError::InvalidAmount(format!(
+                        "overflow summing balance for {account} {commodity}"
+                    ))
+                })?;
             }
         }
     }
-    total
+    Ok(total)
 }
 
 #[cfg(test)]
@@ -144,6 +146,31 @@ mod tests {
         let report = verify_ledger(&snap);
         assert!(report.ok);
         assert_eq!(report.transaction_count, 1);
+    }
+
+    #[test]
+    fn account_balance_errors_on_overflow() {
+        let date = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let max = Amount::from_decimal(rust_decimal::Decimal::MAX);
+        let account = AccountId::new("assets:a").unwrap();
+        let offset = AccountId::new("equity:x").unwrap();
+        let inr = Commodity::new("INR").unwrap();
+        let mk = |payee: &str| {
+            Transaction::new(
+                date,
+                payee,
+                vec![
+                    Posting::new(account.clone(), max, inr.clone()),
+                    Posting::new(offset.clone(), max.checked_neg().unwrap(), inr.clone()),
+                ],
+            )
+            .unwrap()
+        };
+        let snap = LedgerSnapshot {
+            transactions: vec![mk("one"), mk("two")],
+        };
+        let err = account_balance(&snap, &account, &inr).unwrap_err();
+        assert!(matches!(err, CoreError::InvalidAmount(_)));
     }
 
     proptest! {
