@@ -32,9 +32,9 @@ These are **not** always-on. Invoke them at the moments below.
 
 ### `/review-bugbot` (or Bugbot review)
 
-**When:** End of **every phase** (2–7), and after any large risky diff (ledger math, dedupe, reconcile).
+**When:** End of **every phase** (2–7), **on the phase PR/branch** (not after merging to `master`).
 
-**Why:** Defect-first review of the change set before you merge/push.
+**Why:** Defect-first review of the change set before you merge. A branch vs `master` diff is required; reviews on `master` itself see an empty diff.
 
 ```text
 /review-bugbot
@@ -117,6 +117,8 @@ Say: review branch changes for LedgerKit Phase N.
 | 7 Hardening | set `LEDGERKIT_HOOK_FULL=1` | Bugbot + Security + optional Canvas + `/loop` if grinding |
 
 **Commits:** agent commits logical chunks during the phase, not only at the end.
+
+**PRs (Phase 4+):** work on `phase-N-<name>`, push, open a PR, *then* run `/` reviews. Merge to `master` only after review.
 
 ---
 

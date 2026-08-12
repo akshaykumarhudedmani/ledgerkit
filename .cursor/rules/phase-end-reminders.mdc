@@ -1,15 +1,24 @@
 ---
-description: Remind user to run slash reviews at phase boundaries; commit cadence
+description: Remind user to run slash reviews at phase boundaries; commit cadence; PR workflow
 alwaysApply: true
 ---
 
-# Phase-end reminders & commits
+# Phase-end reminders, PRs & commits
+
+## Branch + PR (required from Phase 4 on)
+
+Never land a phase straight on `master`. For each phase:
+
+1. Create `phase-N-<short-name>` from latest `master`.
+2. Commit logical chunks on that branch.
+3. Push and open a PR **before** asking the user to run `/` reviews.
+4. Reviews need a non-empty branch diff vs `master`. Direct-to-master pushes make Bugbot/Security see an empty diff.
 
 ## When a phase deliverable is done
 
 **Stop before starting the next phase.** Tell the user clearly:
 
-1. Phase N is complete.
+1. Phase N is complete (include the PR URL).
 2. Run the required `/` commands (do not skip):
 
 | Just finished | User must run |
@@ -21,10 +30,10 @@ alwaysApply: true
 | Phase 6 | `/review-bugbot` (optional `/split-to-prs` if history is messy) |
 | Phase 7 | `/review-bugbot` + `/review-security` (optional Canvas for metrics) |
 
-3. Wait for them to paste findings / say “fixed” / “continue” before Phase N+1.
+3. Wait for them to paste findings / say “fixed” / “continue” before merging and starting Phase N+1.
 
 ## Commits
 
 - Commit **now and then** during implementation (logical chunks), not only at phase end.
 - Use clear messages; never commit secrets (`.env`, tokens, real bank statements).
-- Push when the user wants remote backup, or after a phase + review cycle.
+- Push the **feature branch** as you go; merge to `master` only after reviews.

@@ -1,0 +1,7 @@
+[
+  { "payee": "AMZN MKTP US*ABC123", "amount": "-42.15", "expected_category": "expenses:shopping" },
+  { "payee": "NETFLIX.COM", "amount": "-15.99", "expected_category": "expenses:subscriptions" },
+  { "payee": "UBER *TRIP", "amount": "-18.40", "expected_category": "expenses:transport" },
+  { "payee": "ACME PAYROLL", "amount": "2500.00", "expected_category": "income:salary" },
+  { "payee": "RANDOM MERCHANT XYZ", "amount": "-3.00", "expected_category": null }
+]
