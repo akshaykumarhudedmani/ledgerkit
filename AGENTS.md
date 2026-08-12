@@ -22,6 +22,7 @@ Or run the demo: `scripts/demo.ps1` (Windows) / `make demo` (Unix).
 
 - **Hooks** (auto): see `.cursor/hooks.json` — quality gate on agent stop, shell guard, prompt secret block.
 - **Manual slash skills**: see `docs/agent-workflow.md` for when to run Bugbot / Security / Split PRs / Autopilot / Loop.
+- **PRs (Phase 4+):** implement on `phase-N-<name>`, open a PR, then `/review-*`. Do not land phases straight on `master`.
 
 ## Repo
 
