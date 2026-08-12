@@ -612,7 +612,9 @@ name = "ledgerkit-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "ledgerkit-core",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "thiserror",

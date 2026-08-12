@@ -53,3 +53,4 @@ jobs:
           cargo run -p ledgerkit-cli -- verify --dir .demo
           cargo run -p ledgerkit-cli -- replay --dir .demo
           cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
+          cargo run -p ledgerkit-cli -- export --format csv --out .demo/ledger.csv --dir .demo

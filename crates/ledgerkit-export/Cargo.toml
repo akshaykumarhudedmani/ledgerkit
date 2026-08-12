@@ -12,3 +12,7 @@ ledgerkit-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+chrono = { workspace = true }
+pretty_assertions = { workspace = true }
