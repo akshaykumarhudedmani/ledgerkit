@@ -1,0 +1,17 @@
+---
+description: LedgerKit non-negotiable product pillars — always enforce
+alwaysApply: true
+---
+
+# LedgerKit pillars
+
+- **Local-first**: no cloud accounts, paid bank APIs, Plaid, or telemetry.
+- **Deterministic**: same input + rules ⇒ same output; no wall-clock in content hashes.
+- **Auditable**: every mutate appends an event; never silent rewrite of history.
+- **Money**: `rust_decimal` / integer minor units only — never `f32`/`f64` for amounts.
+- **Double-entry**: every transaction balances per commodity; reject unbalanced txns.
+- **No silent drops**: import row errors must be reported in `ParseReport`.
+- **Dedup never deletes**: use `duplicate_of` + explanation event.
+- **Balances**: derived from postings only (skip duplicates).
+
+If a request conflicts with these, refuse the shortcut and keep the invariant.

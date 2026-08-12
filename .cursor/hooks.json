@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "python .cursor/hooks/quality-gate.py",
+        "timeout": 300,
+        "loop_limit": 3
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python .cursor/hooks/shell-guard.py",
+        "failClosed": false
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "python .cursor/hooks/prompt-guard.py"
+      }
+    ]
+  }
+}

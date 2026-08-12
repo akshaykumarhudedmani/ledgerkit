@@ -1,0 +1,14 @@
+---
+description: Bank adapter and exporter plugin rules
+globs: "crates/ledgerkit-import/**/*.rs,crates/ledgerkit-export/**/*.rs,plugins/**/*.rs"
+alwaysApply: false
+---
+
+# Adapters & exporters
+
+- Implement `BankAdapter` / `Exporter` traits; register built-ins in `adapters::builtin`.
+- Parsers must be deterministic and never execute CSV content.
+- Required columns missing → `AdapterError::Schema`; bad rows → `ParseReport.errors`.
+- Add anonymized fixtures under `fixtures/csv/<adapter>/` with every new adapter.
+- Do not commit real account numbers, full legal names, or unredacted statements.
+- External plugins live under `plugins/` and depend on public traits only.

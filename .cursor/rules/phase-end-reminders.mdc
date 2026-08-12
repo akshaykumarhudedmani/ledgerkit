@@ -1,0 +1,30 @@
+---
+description: Remind user to run slash reviews at phase boundaries; commit cadence
+alwaysApply: true
+---
+
+# Phase-end reminders & commits
+
+## When a phase deliverable is done
+
+**Stop before starting the next phase.** Tell the user clearly:
+
+1. Phase N is complete.
+2. Run the required `/` commands (do not skip):
+
+| Just finished | User must run |
+|---------------|---------------|
+| Phase 2 | `/review-bugbot` |
+| Phase 3 | `/review-bugbot` then `/review-security` |
+| Phase 4 | `/review-bugbot` |
+| Phase 5 | `/review-bugbot` then `/review-security` |
+| Phase 6 | `/review-bugbot` (optional `/split-to-prs` if history is messy) |
+| Phase 7 | `/review-bugbot` + `/review-security` (optional Canvas for metrics) |
+
+3. Wait for them to paste findings / say “fixed” / “continue” before Phase N+1.
+
+## Commits
+
+- Commit **now and then** during implementation (logical chunks), not only at phase end.
+- Use clear messages; never commit secrets (`.env`, tokens, real bank statements).
+- Push when the user wants remote backup, or after a phase + review cycle.

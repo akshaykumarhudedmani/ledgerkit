@@ -15,6 +15,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+Agent quality setup (rules + hooks + when to run `/` skills): see [docs/agent-workflow.md](docs/agent-workflow.md) and `AGENTS.md`.
+
 ## Adding a bank adapter
 
 1. Implement `BankAdapter` in `crates/ledgerkit-import/src/adapters/`.
