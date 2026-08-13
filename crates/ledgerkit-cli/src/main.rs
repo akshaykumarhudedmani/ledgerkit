@@ -13,9 +13,9 @@ use ledgerkit_core::{
 use ledgerkit_export::{BeancountExporter, CsvExporter, Exporter, JsonExporter};
 use ledgerkit_import::adapters::{self, list_builtin};
 use ledgerkit_import::{
-    apply_rules, convert_raw, plan_dedupe, ConvertOptions, DedupeOptions, RuleSet,
+    apply_rules, convert_raw, plan_dedupe, ConvertOptions, DedupeOptions, RuleSet, MAX_IMPORT_BYTES,
 };
-use ledgerkit_store::{ImportBatchSpec, ImportOutcome, Store};
+use ledgerkit_store::{ImportBatchSpec, ImportOutcome, StatementRowSpec, Store};
 
 #[derive(Parser, Debug)]
 #[command(name = "ledgerkit")]
@@ -95,20 +95,23 @@ enum Commands {
         #[arg(long)]
         account: String,
         #[arg(long)]
-        balance: String,
+        balance: Option<String>,
         #[arg(long = "as-of")]
-        as_of: String,
+        as_of: Option<String>,
         #[arg(long, default_value = "INR")]
         commodity: String,
         /// Optional opening balance (default 0; use when the ledger does not contain earlier history)
         #[arg(long)]
         starting: Option<String>,
+        /// Also (or only) match persisted statement rows to imported transactions
+        #[arg(long)]
+        rows: bool,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
-    /// Explain the event-log derivation chain for a transaction
+    /// Explain the event-log derivation chain for a transaction or statement-row id
     Why {
-        tx_id: String,
+        id: String,
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -123,6 +126,11 @@ enum Commands {
     },
     /// Verify ledger invariants, event chain, and replay hash
     Verify {
+        #[arg(long, default_value = ".ledgerkit")]
+        dir: PathBuf,
+    },
+    /// Wipe projections and replay the event log (events are never rewritten)
+    Rebuild {
         #[arg(long, default_value = ".ledgerkit")]
         dir: PathBuf,
     },
@@ -229,18 +237,21 @@ fn main() -> Result<()> {
             as_of,
             commodity,
             starting,
+            rows,
             dir,
         } => cmd_reconcile(
             &dir,
             &account,
-            &balance,
-            &as_of,
+            balance.as_deref(),
+            as_of.as_deref(),
             &commodity,
             starting.as_deref(),
+            rows,
         ),
-        Commands::Why { tx_id, dir } => cmd_why(&dir, &tx_id),
+        Commands::Why { id, dir } => cmd_why(&dir, &id),
         Commands::Export { format, out, dir } => cmd_export(&dir, &format, &out),
         Commands::Verify { dir } => cmd_verify(&dir),
+        Commands::Rebuild { dir } => cmd_rebuild(&dir),
         Commands::Adapters => {
             for id in list_builtin() {
                 println!("{id}");
@@ -438,12 +449,44 @@ fn proof_report_path(dir: &Path, filename: &str) -> Result<PathBuf> {
 fn cmd_reconcile(
     dir: &Path,
     account: &str,
-    balance: &str,
-    as_of: &str,
+    balance: Option<&str>,
+    as_of: Option<&str>,
     commodity: &str,
     starting: Option<&str>,
+    rows: bool,
 ) -> Result<()> {
     ensure_workspace(dir)?;
+    let mut store = Store::open(db_path(dir))?;
+    if rows {
+        let account_id = AccountId::new(account)?;
+        let report = store.prove_row_reconcile(account_id.as_str())?;
+        let filename = format!(
+            "reconcile-rows-{}.md",
+            account_id.as_str().replace(':', "_")
+        );
+        let path = proof_report_path(dir, &filename)?;
+        fs::create_dir_all(dir.join("reports"))?;
+        fs::write(&path, report.to_markdown())?;
+        println!(
+            "row_reconcile account={} matched={} unmatched_rows={} convert_errors={} parse_errors={} unmatched_txns={} report={}",
+            report.account,
+            report.matched,
+            report.unmatched_rows.len(),
+            report.convert_errors.len(),
+            report.parse_errors.len(),
+            report.unmatched_txns.len(),
+            path.display()
+        );
+        if !report.ok() {
+            bail!("statement-row gaps (see {})", path.display());
+        }
+        println!("row_reconcile: OK");
+        if balance.is_none() {
+            return Ok(());
+        }
+    }
+    let balance = balance.context("reconcile requires --balance (or pass --rows only)")?;
+    let as_of = as_of.context("reconcile requires --as-of (or pass --rows only)")?;
     let as_of_date = NaiveDate::parse_from_str(as_of, "%Y-%m-%d")
         .with_context(|| format!("as-of must be YYYY-MM-DD, got {as_of}"))?;
     let req = ReconcileRequest {
@@ -456,7 +499,6 @@ fn cmd_reconcile(
             None => Amount::zero(),
         },
     };
-    let mut store = Store::open(db_path(dir))?;
     let snapshot = store.load_snapshot()?;
     let proof = prove_reconcile(&snapshot, &req)?;
     let filename = proof.proof_filename();
@@ -491,12 +533,16 @@ fn cmd_reconcile(
     Ok(())
 }
 
-fn cmd_why(dir: &Path, tx_id: &str) -> Result<()> {
+fn cmd_why(dir: &Path, id: &str) -> Result<()> {
     ensure_workspace(dir)?;
-    let id =
-        TransactionId::parse(tx_id).with_context(|| format!("invalid transaction id {tx_id}"))?;
     let store = Store::open(db_path(dir))?;
-    let steps = store.why_transaction(id)?;
+    let steps = if let Ok(tx) = TransactionId::parse(id) {
+        store.why_transaction(tx)?
+    } else if let Ok(row_id) = id.parse::<i64>() {
+        store.why_statement_row(row_id)?
+    } else {
+        bail!("invalid id {id} (want transaction UUID or statement-row integer)");
+    };
     println!("why {id} steps={}", steps.len());
     for step in steps {
         println!("  seq={} {}: {}", step.seq, step.kind, step.summary);
@@ -551,7 +597,23 @@ fn cmd_import(
     let mut store = Store::open(db_path(dir))?;
     let adapter = adapters::builtin(adapter_id)
         .with_context(|| format!("unknown adapter '{adapter_id}' — try `ledgerkit adapters`"))?;
+    let meta_len = fs::metadata(path)
+        .with_context(|| format!("stat {}", path.display()))?
+        .len();
+    if meta_len > MAX_IMPORT_BYTES as u64 {
+        bail!(
+            "refusing to import {} ({meta_len} bytes > {MAX_IMPORT_BYTES} byte cap)",
+            path.display()
+        );
+    }
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    if bytes.len() > MAX_IMPORT_BYTES {
+        bail!(
+            "refusing to import {} ({} bytes > {MAX_IMPORT_BYTES} byte cap)",
+            path.display(),
+            bytes.len()
+        );
+    }
     let (raw, report) = adapter.parse(&bytes)?;
 
     let hash = ledgerkit_core::ContentHash::sha256_bytes(&bytes);
@@ -599,7 +661,8 @@ fn cmd_import(
             println!("    - {err}");
         }
     }
-    if converted.transactions.is_empty() {
+    let statement_rows = statement_specs(&raw, &converted, &report);
+    if converted.transactions.is_empty() && statement_rows.is_empty() {
         bail!(
             "no transactions converted (parse ok_rows={}, convert errors={})",
             report.ok_rows,
@@ -624,16 +687,19 @@ fn cmd_import(
         source_path: path.display().to_string(),
         source_sha256: hash,
         imported_at: Utc::now(),
-        row_count: converted.transactions.len() as u64,
+        row_count: statement_rows.len() as u64,
     };
     let posted_n = converted.transactions.len();
-    match store.apply_import(spec, accounts, converted.transactions)? {
+    match store.apply_import(spec, accounts, converted.transactions, statement_rows)? {
         ImportOutcome::Applied {
             batch_id,
             posted,
+            skipped_existing,
             last_seq,
         } => {
-            println!("  posted={posted} batch={batch_id} last_event_seq={last_seq}");
+            println!(
+                "  posted={posted} skipped_existing={skipped_existing} batch={batch_id} last_event_seq={last_seq}"
+            );
         }
         ImportOutcome::Duplicate { batch_id } => {
             println!(
@@ -642,6 +708,92 @@ fn cmd_import(
         }
     }
     Ok(())
+}
+
+fn parse_error_row_number(err: &str) -> Option<i64> {
+    let lower = err.to_ascii_lowercase();
+    let idx = lower.find("row ")?;
+    let rest = err.get(idx + 4..)?.trim_start();
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
+fn statement_specs(
+    raw: &ledgerkit_import::RawTransactions,
+    converted: &ledgerkit_import::ConvertReport,
+    parse: &ledgerkit_import::ParseReport,
+) -> Vec<StatementRowSpec> {
+    let mut rows: Vec<StatementRowSpec> = raw
+        .transactions
+        .iter()
+        .zip(converted.row_outcomes.iter())
+        .map(|(row, outcome)| match outcome {
+            Ok(tx) => StatementRowSpec {
+                row_number: row.row_number as i64,
+                date_raw: Some(row.date_raw.clone()),
+                amount_raw: Some(row.amount_raw.clone()),
+                currency_raw: row.currency_raw.clone(),
+                description_raw: Some(row.description_raw.clone()),
+                balance_raw: row.balance_raw.clone(),
+                source_refs: row.source_refs.clone(),
+                fingerprint: tx.row_fingerprint.clone(),
+                parse_status: "ok".into(),
+                error: None,
+                transaction_id: Some(tx.id),
+            },
+            Err(err) => StatementRowSpec {
+                row_number: row.row_number as i64,
+                date_raw: Some(row.date_raw.clone()),
+                amount_raw: Some(row.amount_raw.clone()),
+                currency_raw: row.currency_raw.clone(),
+                description_raw: Some(row.description_raw.clone()),
+                balance_raw: row.balance_raw.clone(),
+                source_refs: row.source_refs.clone(),
+                fingerprint: None,
+                parse_status: "convert_error".into(),
+                error: Some(err.clone()),
+                transaction_id: None,
+            },
+        })
+        .collect();
+    let used: std::collections::HashSet<i64> = rows.iter().map(|r| r.row_number).collect();
+    for (i, err) in parse.errors.iter().enumerate() {
+        let row_number = parse_error_row_number(err).unwrap_or(-(i as i64 + 1));
+        if used.contains(&row_number) {
+            continue;
+        }
+        rows.push(StatementRowSpec {
+            row_number,
+            date_raw: None,
+            amount_raw: None,
+            currency_raw: None,
+            description_raw: None,
+            balance_raw: None,
+            source_refs: Vec::new(),
+            fingerprint: None,
+            parse_status: "parse_error".into(),
+            error: Some(err.clone()),
+            transaction_id: None,
+        });
+    }
+    rows
+}
+
+fn cmd_rebuild(dir: &Path) -> Result<()> {
+    ensure_workspace(dir)?;
+    let mut store = Store::open(db_path(dir))?;
+    store.verify_event_chain()?;
+    let (mat, rep) = store.rebuild_projections()?;
+    println!(
+        "rebuild transactions={} ledger_hash={} replay_hash={}",
+        mat.transaction_count, mat.ledger_hash, rep.ledger_hash
+    );
+    if mat.ok && mat.ledger_hash == rep.ledger_hash {
+        println!("rebuild: OK");
+        Ok(())
+    } else {
+        bail!("rebuild: FAILED");
+    }
 }
 
 fn cmd_export(dir: &Path, format: &str, out: &Path) -> Result<()> {
@@ -693,5 +845,58 @@ fn cmd_verify(dir: &Path) -> Result<()> {
             println!("  unbalanced: {u}");
         }
         bail!("verify: FAILED");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ledgerkit_import::{ParseReport, RawTransaction, RawTransactions};
+
+    #[test]
+    fn parse_error_row_number_extracts_adapter_format() {
+        assert_eq!(
+            parse_error_row_number("parse error at row 3: missing amount"),
+            Some(3)
+        );
+        assert_eq!(parse_error_row_number("row 12: csv boom"), Some(12));
+        assert_eq!(parse_error_row_number("no row here"), None);
+    }
+
+    #[test]
+    fn statement_specs_keep_parse_and_convert_errors() {
+        let raw = RawTransactions {
+            adapter_id: "generic_csv".into(),
+            transactions: vec![RawTransaction {
+                row_number: 2,
+                date_raw: "not-a-date".into(),
+                amount_raw: "10".into(),
+                currency_raw: None,
+                description_raw: "x".into(),
+                balance_raw: None,
+                source_refs: vec!["generic:row:2".into()],
+            }],
+        };
+        let converted = convert_raw(
+            &raw,
+            &ConvertOptions {
+                bank_account: AccountId::new("assets:bank").unwrap(),
+                expense_account: AccountId::new("expenses:uncategorized").unwrap(),
+                income_account: AccountId::new("income:uncategorized").unwrap(),
+                default_commodity: Commodity::new("USD").unwrap(),
+                import_batch_id: ImportBatchId::new(),
+            },
+        );
+        let parse = ParseReport {
+            ok_rows: 1,
+            error_rows: 1,
+            errors: vec!["parse error at row 3: missing amount".into()],
+        };
+        let rows = statement_specs(&raw, &converted, &parse);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|r| r.parse_status == "convert_error"));
+        assert!(rows.iter().any(|r| r.parse_status == "parse_error"
+            && r.row_number == 3
+            && r.error.as_deref() == Some("parse error at row 3: missing amount")));
     }
 }

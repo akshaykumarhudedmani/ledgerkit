@@ -100,13 +100,14 @@ Expect `posted` → `deduped` → `reconciled` (only if `date <= as_of`).
 
 ---
 
-## 8. Replay hash (30s)
+## 8. Replay / rebuild hash (30s)
 
 ```powershell
 cargo run -p ledgerkit-cli -- replay --dir .demo
+cargo run -p ledgerkit-cli -- rebuild --dir .demo
 ```
 
-`ledger_hash` matches `verify`’s `replay_hash`. Same input + rules ⇒ same output; event `at` timestamps are not in the ledger content hash.
+`ledger_hash` matches after rebuild. Same input + rules ⇒ same output; event `at` timestamps are not in the ledger content hash.
 
 ---
 

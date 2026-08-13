@@ -1,115 +1,171 @@
 # LedgerKit
 
-**Local-first financial data engine** that turns messy bank exports into an auditable, double-entry ledger with deterministic transforms, reconciliation proofs, and exports — with every decision explainable.
+A program that runs **only on your computer**. You give it a **bank CSV** (a spreadsheet export). It turns that into a **balanced account book**, keeps a **diary of every change**, and can prove the numbers match a statement.
+
+It does **not** log into your bank. It does **not** need an account. It does **not** send your data anywhere.
 
 ```text
-Bank CSV  →  adapters  →  normalize / dedupe / rules  →  double-entry ledger
-                                                              ↓
-                                                         event log (SQLite)
-                                                              ↓
-                                                    CSV / JSON / Beancount
+your CSV  →  understand the columns  →  clean names / find copies / apply your rules
+                                              →  account book + diary (one SQLite file)
+                                              →  check against the statement
+                                              →  save as CSV / JSON / Beancount
 ```
 
-## Pillars
+**Word list (plain English):** [docs/glossary.md](docs/glossary.md).
 
-| Pillar | Meaning |
-|--------|---------|
-| Local-first | No cloud account, no paid bank API, no SaaS dependency |
-| Deterministic | Same input + rules ⇒ same output |
-| Auditable | Append-only event log; every mutate is explainable |
-| Correct money math | `Decimal` only — never floats |
-| Double-entry | Every transaction balances; invariants fail the build |
-| Reconciliation proofs | Prove imports match a statement ending balance |
-| Library + CLI | Embeddable crates and `ledgerkit` CLI |
+---
 
-## Quick start
+## What works 100% (try this)
 
-**Requirements:** Rust 1.75+ (MSVC toolchain on Windows).
+These are checked in the repo and in CI. If they fail, that is a bug.
+
+| Try this | What you should see |
+|----------|---------------------|
+| `.\scripts\demo.ps1` (Windows) or the commands below | Checking account ends at **2409.20 USD** after import + extra Starbucks + dedupe + reconcile |
+| `fixtures/csv/generic/sample.csv` + adapter `generic_csv` | 4 rows import |
+| Same file imported **again** | “already imported” — not doubled |
+| `fixtures/csv/hdfc/sample.csv` + adapter `hdfc` | 3 rows (INR-style columns, dates like `01/02/26`) |
+| `fixtures/csv/credit_card/sample.csv` + adapter `credit_card` | 3 rows |
+| `fixtures/csv/generic/malformed.csv` | 1 good row kept, **1 error printed** (not hidden) |
+| `ledgerkit verify` / `rebuild` after the demo | `verify: OK` / `rebuild: OK`, same ledger hash |
+| `cargo test --workspace` | Tests pass |
+
+**Not guaranteed 100%:** a CSV you download from *your* bank tomorrow. Only the column layouts above (and `custom` if you map columns) are built-in. Real HDFC/SBI/Chase files often add extra header junk. That is an adapter bug/fix, not “the engine is fake.”
+
+**Also not 100% “smart categorize”:** `rules apply` **tags** transactions (`category:…`). It does **not** rewrite the expense account on the posting. Export may still show `expenses:uncategorized` on the money line.
+
+---
+
+## Use it
+
+### 0. Install Rust
+
+You need **Rust 1.75+**. On Windows use the MSVC toolchain ([rustup](https://rustup.rs/)).
 
 ```bash
+git clone https://github.com/akshaykumarhudedmani/ledgerkit
+cd ledgerkit
 cargo build -p ledgerkit-cli
-cargo test --workspace
-
-# Phase 2 ledger demo
-cargo run -p ledgerkit-cli -- init --dir .demo
-cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
-  --account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
-cargo run -p ledgerkit-cli -- dedupe --dir .demo
-cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
-cargo run -p ledgerkit-cli -- verify --dir .demo
-cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
 ```
 
-On Windows PowerShell:
+The binary is `target/debug/ledgerkit` (or `ledgerkit.exe`). Below, `cargo run -p ledgerkit-cli --` means “run that program.”
+
+### 1. One-command demo (Windows)
+
+From the repo root:
 
 ```powershell
 .\scripts\demo.ps1
 ```
 
-Interview talk track (10 min): [docs/demo-script.md](docs/demo-script.md).
+That creates a folder `.demo`, imports the sample CSVs, dedupes, applies sample rules, reconciles to **2409.20 USD**, exports Beancount/CSV. Open `.demo/reports/` for the proof file.
 
-## CLI (v1 surface)
+### 2. Same demo, typed out
 
-```text
-ledgerkit init
-ledgerkit account add --id assets:bank:hdfc --type asset --commodity INR
-ledgerkit tx add --date 2026-03-01 --payee Cafe \
-  --posting assets:bank:hdfc=-250:INR --posting expenses:food=250:INR
-ledgerkit balance --account assets:bank:hdfc
-ledgerkit verify
-ledgerkit replay [--through N]
-ledgerkit import ./statement.csv --account assets:bank:hdfc --adapter hdfc
-ledgerkit rules apply --file fixtures/rules/default.yaml
-ledgerkit dedupe
-ledgerkit reconcile --account assets:bank:checking --balance 2409.20 --as-of 2026-01-07 --commodity USD
-ledgerkit why <tx-id>
-ledgerkit export --format beancount --out ledger.bean
-ledgerkit export --format csv --out ledger.csv
-ledgerkit adapters
+```bash
+cargo run -p ledgerkit-cli -- init --dir .demo
+
+cargo run -p ledgerkit-cli -- import fixtures/csv/generic/sample.csv \
+  --account assets:bank:checking --adapter generic_csv --commodity USD --dir .demo
+
+# optional: HDFC sample
+cargo run -p ledgerkit-cli -- import fixtures/csv/hdfc/sample.csv \
+  --account assets:bank:hdfc --adapter hdfc --commodity INR --dir .demo
+
+cargo run -p ledgerkit-cli -- dedupe --dir .demo
+cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
+
+cargo run -p ledgerkit-cli -- reconcile --account assets:bank:checking \
+  --balance 2409.20 --as-of 2026-01-07 --commodity USD --dir .demo
+
+cargo run -p ledgerkit-cli -- verify --dir .demo
+cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
+cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean --dir .demo
 ```
 
-## Workspace layout
+`--dir .demo` = “put the database in this folder.” Default if you omit it is `.ledgerkit`.
 
-```text
-crates/
-  ledgerkit-core/     # money, accounts, postings, invariants, events
-  ledgerkit-store/    # SQLite append-only event log
-  ledgerkit-import/   # BankAdapter trait + built-in CSV adapters
-  ledgerkit-export/   # JSON + Beancount exporters
-  ledgerkit-cli/      # clap CLI binary `ledgerkit`
-plugins/
-  sample-adapter/     # proves external plugin SDK surface
-docs/                 # design, threat model, schema, roadmap
-fixtures/             # anonymized sample CSVs + golden outputs
+### 3. Commands you will actually use
+
+| Command | Plain meaning |
+|---------|----------------|
+| `init` | Create the folder + empty database |
+| `import FILE --account … --adapter …` | Read a CSV into the book |
+| `adapters` | List built-in CSV layouts |
+| `dedupe` | Link copies; never deletes |
+| `rules apply --file …` | Tag matching payees from a YAML file |
+| `balance --account …` | Add up postings for that account |
+| `reconcile --account … --balance … --as-of YYYY-MM-DD` | Does the book match the statement total? |
+| `reconcile --account … --rows` | Does each saved statement line have a txn? |
+| `why ID` | Diary for a transaction UUID or a statement-row number |
+| `verify` | Check the diary chain and that replay matches |
+| `rebuild` | Wipe the book tables, rebuild from the diary |
+| `export --format json\|beancount\|csv --out FILE` | Write a copy out |
+| `tx add` / `account add` | Type a transaction / account by hand |
+
+Full interview walkthrough: [docs/demo-script.md](docs/demo-script.md).
+
+### 4. Your own CSV
+
+1. Look at the first line (headers).
+2. Pick an adapter:
+   - `Date,Description,Amount` → `generic_csv`
+   - HDFC-style `Date,Narration,Withdrawal Amt.,Deposit Amt.` → `hdfc`
+   - `Transaction Date,…,Description,Amount` → `credit_card`
+   - Something else → `custom` (column mapping) or a new adapter (see Contribute)
+3. **Do not commit real statements** to git. Keep them outside the repo.
+
+If parse errors print, that is working as designed: bad rows are listed, good rows still import.
+
+---
+
+## Contribute
+
+The product is **frozen**. Useful PRs: **bugs**, **better fixtures** (anonymized), **docs that match the code**, adapters that parse a **real** layout without adding PDF/Plaid/AI.
+
+1. Fork / branch off `master`.
+2. Never commit live bank statements or secrets.
+3. Before a PR:
+
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
-## Built-in adapters (Phase 3 targets)
+4. Adapters: implement `BankAdapter` (same file in → same parse out; no clock). Prefer `plugins/` like `plugins/sample-adapter`. Built-ins live in `crates/ledgerkit-import/src/adapters/` and must update `fixtures/golden/parse_counts.json`.
 
-- `hdfc` — HDFC Bank CSV (India)
-- `generic_csv` — US/EU-style Date/Description/Amount
-- `credit_card` — credit-card Transaction Date/Description/Amount
-- `custom` — column-mapping adapter
+Details: [CONTRIBUTING.md](CONTRIBUTING.md). Out of scope: [docs/final.md](docs/final.md).
 
-## Quality tooling
+---
 
-- Agent rules/hooks: [docs/agent-workflow.md](docs/agent-workflow.md) and `AGENTS.md`
-- CI: GitHub Actions on every push
+## Project layout
 
-## Status
+```text
+crates/ledgerkit-core     money, transactions, “does it balance?”
+crates/ledgerkit-store    SQLite file, diary, rebuild, why
+crates/ledgerkit-import   CSV adapters, clean names, dedupe, rules
+crates/ledgerkit-export   JSON / Beancount / CSV
+crates/ledgerkit-cli      the `ledgerkit` command
+plugins/sample-adapter    example extra adapter
+fixtures/                 sample CSVs + tests
+docs/                     design, glossary, interview notes
+```
 
-**Phase 4 (Dedupe + rules):** done — exact/near-window dedupe (`duplicate_of`, never delete) and YAML rules with conflict reporting + labeled metrics.
+---
 
-**Phase 5 (Reconcile + why):** done — statement proof reports under `reports/` and `ledgerkit why <tx-id>` event chains.
+## Docs
 
-**Phase 6 (Export + polish):** done — Beancount `commodity`/`open`/metadata, CSV export, interview demo script.
+| Doc | For |
+|-----|-----|
+| [docs/glossary.md](docs/glossary.md) | Every term in English |
+| [docs/interview-pitch.md](docs/interview-pitch.md) | Explain the project in an interview |
+| [docs/demo-script.md](docs/demo-script.md) | 10-minute live demo |
+| [docs/final.md](docs/final.md) | What “done” means |
+| [docs/identity.md](docs/identity.md) | How import ids are chosen |
+| [docs/design.md](docs/design.md) / [docs/architecture.md](docs/architecture.md) | Design |
 
-**Phase 7 (Hardening):** done — CSV fuzz, 100k-row bench, path-traversal tests, [eval chapter](docs/eval.md).
-
-See [docs/roadmap.md](docs/roadmap.md), [docs/design.md](docs/design.md), and [docs/eval.md](docs/eval.md).
-
-## Non-goals (v1)
-
-Mobile apps, consumer budgeting UI, PDF/OCR spine, Plaid, tax filing, multi-user cloud sync, “AI categorizes everything” as the main claim.
+---
 
 ## License
 

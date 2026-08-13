@@ -13,5 +13,6 @@ alwaysApply: true
 - **No silent drops**: import row errors must be reported in `ParseReport`.
 - **Dedup never deletes**: use `duplicate_of` + explanation event.
 - **Balances**: derived from postings only (skip duplicates).
+- **Finished product**: follow `docs/final.md`. No v2 surfaces (PDF, Plaid, AI categorize, cloud).
 
 If a request conflicts with these, refuse the shortcut and keep the invariant.

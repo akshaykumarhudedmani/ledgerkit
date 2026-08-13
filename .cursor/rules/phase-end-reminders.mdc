@@ -29,8 +29,9 @@ Never land a phase straight on `master`. For each phase:
 | Phase 5 | `/review-bugbot` then `/review-security` |
 | Phase 6 | `/review-bugbot` (optional `/split-to-prs` if history is messy) |
 | Phase 7 | `/review-bugbot` + `/review-security` (optional Canvas for metrics) |
+| Final freeze | `/review-bugbot` then `/review-security` |
 
-3. Wait for them to paste findings / say “fixed” / “continue” before merging and starting Phase N+1.
+3. Wait for them to paste findings / say “fixed” / “continue” before merging. After **Final freeze**, do not start a new product phase.
 
 ## Commits
 

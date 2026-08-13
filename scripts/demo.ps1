@@ -36,9 +36,11 @@ $TxId = $Matches[1]
 cargo run -p ledgerkit-cli -- dedupe --dir .demo
 cargo run -p ledgerkit-cli -- rules apply --file fixtures/rules/default.yaml --dir .demo
 
-Write-Host "==> reconcile + why"
+Write-Host "==> reconcile + why + rebuild"
 cargo run -p ledgerkit-cli -- reconcile --account assets:bank:checking --balance 2409.20 --as-of 2026-01-07 --commodity USD --dir .demo
+cargo run -p ledgerkit-cli -- reconcile --account assets:bank:checking --rows --dir .demo
 cargo run -p ledgerkit-cli -- why $TxId --dir .demo
+cargo run -p ledgerkit-cli -- rebuild --dir .demo
 
 Write-Host "==> balance + verify + replay"
 cargo run -p ledgerkit-cli -- balance --account assets:bank:checking --commodity USD --dir .demo
@@ -50,3 +52,4 @@ cargo run -p ledgerkit-cli -- export --format beancount --out .demo/ledger.bean 
 cargo run -p ledgerkit-cli -- export --format csv --out .demo/ledger.csv --dir .demo
 
 Write-Host "Demo OK. Workspace: $Demo"
+

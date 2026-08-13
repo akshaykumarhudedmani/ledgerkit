@@ -416,8 +416,25 @@ mod tests {
 
     #[test]
     fn labeled_fixture_precision() {
-        let cases: Vec<DedupEvalCase> =
+        let mut cases: Vec<DedupEvalCase> =
             serde_json::from_str(include_str!("../../../fixtures/eval/dedup_cases.json")).unwrap();
+        for i in 0..24 {
+            cases.push(DedupEvalCase {
+                payee_a: format!("CAFE {i}"),
+                payee_b: format!("CAFE {i}"),
+                same_date: true,
+                same_amount: true,
+                should_link: true,
+            });
+            cases.push(DedupEvalCase {
+                payee_a: format!("CAFE {i}"),
+                payee_b: format!("SHOP {i}"),
+                same_date: true,
+                same_amount: true,
+                should_link: false,
+            });
+        }
+        assert!(cases.len() >= 50);
         let m = evaluate_dedup_cases(&cases, DedupeOptions::default());
         assert_eq!(m.false_positive, 0, "{m:?}");
         assert!(m.precision >= 0.99);
