@@ -8,6 +8,7 @@
 - `ledgerkit rebuild` replays events onto wiped projections.
 - Import file-size cap (32 MiB).
 - README how-to-use, [glossary.md](docs/glossary.md), interview brief.
+- Drop Cursor workspace files from the public tree (local `.cursor/` is gitignored).
 - SECURITY.md, CONTRIBUTING.md, versioning notes.
 
 ## 0.1.0 (phases 1–7)

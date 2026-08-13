@@ -17,6 +17,7 @@ Cargo.lock.bak
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
@@ -24,9 +25,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-
-# Hook / local agent noise
-.cursor/hooks/*.log
 
 # Python helpers / notebooks (optional local use)
 __pycache__/
