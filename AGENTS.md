@@ -1,15 +1,15 @@
-# LedgerKit — agent instructions
+# LedgerKit
 
-This is a **local-first Rust** financial data engine (CSV → auditable double-entry ledger).
+Local-first Rust engine: bank CSV → auditable double-entry ledger.
 
-## Always true
+Invariants (do not break):
 
-- Read `.cursor/rules/` (auto-applied), `docs/final.md`, and `docs/roadmap.md`.
-- Never use floats for money; never delete duplicates; never silent-drop CSV rows.
-- This repo is a **finished product**. Bug fixes only after the final freeze lands.
-- Prefer failing invariants over shipping a demo that lies about balances.
-
-## Verify before claiming done
+- No floats for money (`rust_decimal` only).
+- Unbalanced transactions never enter the ledger.
+- CSV row failures are reported; never dropped silently.
+- Duplicates get `duplicate_of`; never deleted.
+- Balances come from postings only (skip duplicates).
+- Finished product: [docs/final.md](docs/final.md). Bug fixes only.
 
 ```bash
 cargo fmt --all
@@ -17,14 +17,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Or run the demo: `scripts/demo.ps1` (Windows) / `make demo` (Unix).
-
-## Quality tooling
-
-- **Hooks** (auto): see `.cursor/hooks.json` — quality gate on agent stop, shell guard, prompt secret block.
-- **Manual slash skills**: see `docs/agent-workflow.md` for when to run Bugbot / Security / Split PRs / Autopilot / Loop.
-- **PRs after freeze:** bug fixes on a feature branch + PR vs `master`. Do not land straight on `master`.
-
-## Repo
+Demo: `scripts/demo.ps1` (Windows) / `make demo` (Unix).
 
 https://github.com/akshaykumarhudedmani/ledgerkit

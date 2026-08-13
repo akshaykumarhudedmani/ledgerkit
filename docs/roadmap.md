@@ -11,11 +11,9 @@ Phases 1–7 are **done** (merged to `master`). Remaining work in this repo is t
 | 5. Reconcile + why | Ending-balance proofs + `why` | **Done** |
 | 6. Export + polish | Beancount + CSV + demo script | **Done** |
 | 7. Hardening | Fuzz, benches, eval chapter | **Done** |
-| Final | Identity, statement rows, row recon, rebuild, hygiene | **This branch** |
+| Final | Identity, statement rows, row recon, rebuild, hygiene | **Done** |
 
-After final lands: **stop**. Bug fixes only. Do not open a Phase 8 product surface.
-
-Agent workflow: [agent-workflow.md](agent-workflow.md). Final PR still needs `/review-bugbot` then `/review-security` (schema + paths + import).
+After final: **stop**. Bug fixes only. Do not open a Phase 8 product surface.
 
 ## Demo script (interview, ~10 min)
 
