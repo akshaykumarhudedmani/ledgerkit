@@ -105,6 +105,32 @@ impl Store {
         }
         Ok(steps)
     }
+
+    pub fn why_statement_row(&self, row_id: i64) -> Result<Vec<WhyStep>> {
+        let row = self
+            .get_statement_row(row_id)?
+            .ok_or_else(|| anyhow::anyhow!("no statement row {row_id}"))?;
+        let mut steps = vec![WhyStep {
+            seq: 0,
+            kind: "statement_row",
+            summary: format!(
+                "id={row_id} batch={} row={} status={} fingerprint={} tx={}",
+                row.batch_id,
+                row.row_number,
+                row.parse_status,
+                row.fingerprint.as_deref().unwrap_or("-"),
+                row.transaction_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "-".into())
+            ),
+        }];
+        if let Some(tx_id) = row.transaction_id {
+            if let Ok(more) = self.why_transaction(tx_id) {
+                steps.extend(more);
+            }
+        }
+        Ok(steps)
+    }
 }
 
 #[cfg(test)]

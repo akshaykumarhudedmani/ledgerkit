@@ -1,6 +1,6 @@
 # LedgerKit Design Document (Phase 1)
 
-**Status:** living draft  
+**Status:** final product (see [final.md](final.md))  
 **Stack:** Rust + SQLite + clap + serde + rust_decimal + proptest  
 **Thesis:** LedgerKit is a local-first financial data engine that turns messy bank exports into an auditable, double-entry ledger with deterministic transforms, reconciliation proofs, and exports — with every decision explainable.
 
@@ -31,14 +31,9 @@ LedgerKit sits **between** ugly exports and tools people already trust (Beancoun
 5. Stable adapter/exporter plugin interfaces.
 6. Usable as library crates *and* CLI.
 
-### Non-goals (v1)
+### Non-goals
 
-- Mobile / consumer budgeting UI
-- PDF/OCR as core path
-- Plaid / paid bank APIs
-- Tax filing, investment charting
-- Multi-user cloud sync
-- ML categorization as primary claim
+See [final.md](final.md). No mobile, PDF/OCR, Plaid, tax, cloud sync, ML categorization, or a v2 product in this repo.
 
 ---
 
@@ -96,7 +91,8 @@ LedgerKit sits **between** ugly exports and tools people already trust (Beancoun
 ### Dedup
 
 - Fingerprint: date + amount + account + normalized merchant + source refs.
-- Strategies: exact, near-window, import-vs-import.
+- Import identity: see [identity.md](identity.md). Overlapping files reuse the same transaction id.
+- Strategies: exact, near-window.
 - Never delete: set `duplicate_of` + explanation event.
 
 ### Categorization
@@ -120,11 +116,13 @@ Each event stores:
 - `content_hash` of canonical payload (chained with `prev_hash`, id, at, kind)
 - `prev_hash` forming a hash chain
 
-Phase 2 event kinds used for ledger core: `account_upserted`, `posted`.
+Ledger core event kinds: `account_upserted`, `posted`.
 
 **Replay invariant:** folding `Posted` events `0..=N` always rebuilds the same ledger content hash as the materialized tables.
 
-**`ledgerkit why <tx_id>`:** walks events referencing that transaction.
+**`ledgerkit why <tx_id|row_id>`:** walks events referencing that transaction, or a persisted statement row.
+
+**`ledgerkit rebuild`:** deletes projection tables and folds events back; ledger content hash must match.
 
 ---
 
@@ -138,10 +136,11 @@ Phase 2 event kinds used for ledger core: `account_upserted`, `posted`.
 
 ## 7. Reconciliation
 
-**Input:** account, period, ending balance (optional starting balance).  
-**Output:** matched set, unmatched set, unexplained delta, suggested fixes, markdown/HTML proof report.
+**Ending balance:** account, as-of date, stated ending (optional starting). Output: matched postings, skipped duplicates, unexplained delta, markdown proof.
 
-Success means unexplained delta == 0 within commodity scale.
+**Statement rows:** `reconcile --rows` matches persisted `statement_rows` to imported transactions (plus convert/parse errors).
+
+Success for ending-balance means unexplained delta == 0 within commodity scale.
 
 ---
 
@@ -186,11 +185,9 @@ Success means unexplained delta == 0 within commodity scale.
 
 ---
 
-## 12. Open questions
+## 12. Closed questions
 
-1. Multi-currency conversion: stub vs full revaluation in v1?
-2. Transfer detection across accounts: Phase 5 or stretch?
-3. Rules DSL: YAML-only first, or JSON Schema dual?
+Multi-currency conversion, transfer detection, and JSON Schema for rules are **out of product**. Use Beancount (or another tool) after export if you need them.
 
 ---
 

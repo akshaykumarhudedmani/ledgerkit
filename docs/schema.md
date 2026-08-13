@@ -1,15 +1,17 @@
 # Data Model & SQLite Schema
 
-Schema version: **1** (see `ledgerkit-store::SCHEMA_VERSION`)
+Schema version: **3** (see `ledgerkit-store::SCHEMA_VERSION`)
 
 ## Logical model
 
 ```text
 Commodity 1---* Account
 Merchant 1---* Alias
+ImportBatch 1---* StatementRow
 ImportBatch 1---* Transaction
 Transaction 1---* Posting
 Transaction *---0..1 Transaction (duplicate_of)
+StatementRow *---0..1 Transaction
 Event (append-only log)
 ```
 
@@ -20,6 +22,7 @@ Event (append-only log)
 3. Balances = Σ postings for account (skip `duplicate_of IS NOT NULL`)
 4. Events are insert-only; `prev_hash` chains to genesis
 5. Replaying events yields identical ledger content hash
+6. Import identity: see [identity.md](identity.md)
 
 ## Tables (summary)
 
@@ -30,7 +33,8 @@ Event (append-only log)
 | `commodities` | currency codes + decimal scale |
 | `merchants` / `merchant_aliases` | identity + aliases |
 | `import_batches` | source path + sha256 + adapter |
-| `transactions` / `postings` | double-entry journal |
+| `statement_rows` | every parsed/failed import row |
+| `transactions` / `postings` | double-entry journal (`row_fingerprint` on imports) |
 | `events` | append-only audit log |
 
 Proof markdown is written under the workspace `reports/` directory (created by `init`).
@@ -41,15 +45,16 @@ Exact SQL: `crates/ledgerkit-store/src/schema.rs`.
 
 | Kind | Meaning |
 |------|---------|
-| `account_upserted` | Chart of accounts change (Phase 2) |
-| `posted` | Balanced transaction accepted (Phase 2) |
+| `account_upserted` | Chart of accounts change |
+| `posted` | Balanced transaction accepted |
 | `imported` | New batch from adapter |
 | `normalized` | Merchant/date/amount normalization |
 | `deduped` | Linked duplicate → survivor |
 | `categorized` | Rule applied |
 | `reconciled` | Statement proof produced |
-| `manual_edit` | Explicit user correction |
+| `manual_edit` | Explicit user correction (`tx add` is a `posted` event) |
 
 ## ID strategy
 
-UUIDv7 for transactions, merchants, batches (time-sortable, opaque).
+- **Imported** transactions: SHA-256 of row fingerprint → UUID v8-shaped.
+- **Manual** `tx add`, merchants, batches, events: UUIDv7.

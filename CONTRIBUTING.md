@@ -1,33 +1,37 @@
 # Contributing
 
-## Principles
+This repository is a **finished product**. Useful PRs: bug fixes, anonymized fixtures, docs that match the code, adapters for a CSV layout you actually have.
 
-1. Money correctness beats features.
-2. Every mutate needs an event + explanation.
-3. Adapters never silently drop rows.
-4. Prefer deterministic rules over opaque ML.
+Not useful: mobile app, PDF/OCR, Plaid, AI categorize, cloud — see [docs/final.md](docs/final.md).
 
-## Dev setup
+**Never commit real bank statements.** Copy them, strip names/account numbers, or keep them off git.
+
+## How to send a change
+
+1. Branch from `master` (or the open freeze PR if you are asked to).
+2. Make the smallest change that proves the fix (a test that failed, then passes).
+3. Run:
 
 ```bash
-rustup default stable
-cargo test --workspace
+cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
-Agent quality setup (rules + hooks + when to run `/` skills): see [docs/agent-workflow.md](docs/agent-workflow.md) and `AGENTS.md`.
+4. Open a pull request. Describe **what broke** and **how you know it is fixed**.
 
-## Adding a bank adapter
+## Adding a CSV adapter
 
-1. Implement `BankAdapter` in `crates/ledgerkit-import/src/adapters/`.
-2. Register in `adapters::builtin`.
-3. Add anonymized fixture under `fixtures/csv/<bank>/`.
-4. Add golden expectations when Phase 3 lands.
-5. Document columns in a short comment at the top of the adapter file.
+1. Implement `ledgerkit_import::BankAdapter`: `parse(bytes)` must be **deterministic** (no clock in the output).
+2. Prefer a crate under `plugins/` that depends only on public traits (see `plugins/sample-adapter`).
+3. Built-in adapters: `crates/ledgerkit-import/src/adapters/`. Update `fixtures/golden/parse_counts.json`.
+4. Put a tiny anonymized sample under `fixtures/csv/<name>/`.
 
-## PR checklist
+## Money and audit (do not break these)
 
-- [ ] Tests for new invariants / parsers
-- [ ] No floats in money paths
-- [ ] `cargo fmt` + clippy clean
-- [ ] Fixtures anonymized (no real account numbers / names)
+- Amounts: `rust_decimal` only — never `f32`/`f64`.
+- Unbalanced transactions must fail construction.
+- Import row failures go in `ParseReport` / `statement_rows`; never drop a row with no error.
+- Duplicates get `duplicate_of`; never delete.
+
+Plain-language terms: [docs/glossary.md](docs/glossary.md). How to run the demo: [README.md](README.md).

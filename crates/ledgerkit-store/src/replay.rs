@@ -4,6 +4,7 @@ use ledgerkit_core::{
     VerifyReport,
 };
 
+use crate::ledger::{insert_account_rows, insert_transaction_rows};
 use crate::Store;
 
 impl Store {
@@ -84,6 +85,65 @@ impl Store {
     pub fn balance_of(&self, account: &AccountId, commodity: &Commodity) -> Result<Amount> {
         let snapshot = self.load_snapshot()?;
         Ok(account_balance(&snapshot, account, commodity)?)
+    }
+
+    /// Wipe derived ledger tables and re-apply events. Event log is never rewritten.
+    pub fn rebuild_projections(&mut self) -> Result<(VerifyReport, VerifyReport)> {
+        let events = self.list_events()?;
+        self.conn.execute_batch("PRAGMA foreign_keys=OFF")?;
+        self.conn.execute_batch(
+            "DELETE FROM postings;
+             DELETE FROM transactions;
+             DELETE FROM merchant_aliases;
+             DELETE FROM merchants;
+             DELETE FROM accounts;
+             DELETE FROM commodities;",
+        )?;
+        self.conn.execute_batch("PRAGMA foreign_keys=ON")?;
+
+        let db_tx = self.conn.transaction()?;
+        for event in events {
+            match event.payload {
+                EventPayload::AccountUpserted { account } => {
+                    insert_account_rows(&db_tx, &account)?;
+                }
+                EventPayload::Posted { transaction } => {
+                    insert_transaction_rows(&db_tx, &transaction)?;
+                }
+                EventPayload::Deduped {
+                    duplicate_id,
+                    survivor_id,
+                    ..
+                } => {
+                    db_tx.execute(
+                        "UPDATE transactions SET duplicate_of = ?1 WHERE id = ?2",
+                        [survivor_id.to_string(), duplicate_id.to_string()],
+                    )?;
+                }
+                EventPayload::Categorized {
+                    transaction_id,
+                    category,
+                    ..
+                } => {
+                    let tags_json: String = db_tx.query_row(
+                        "SELECT tags_json FROM transactions WHERE id = ?1",
+                        [transaction_id.to_string()],
+                        |row| row.get(0),
+                    )?;
+                    let mut tags: Vec<String> =
+                        serde_json::from_str(&tags_json).unwrap_or_default();
+                    tags.retain(|t| !t.starts_with("category:"));
+                    tags.push(format!("category:{category}"));
+                    db_tx.execute(
+                        "UPDATE transactions SET tags_json = ?1 WHERE id = ?2",
+                        [serde_json::to_string(&tags)?, transaction_id.to_string()],
+                    )?;
+                }
+                _ => {}
+            }
+        }
+        db_tx.commit()?;
+        self.assert_replay_matches_materialized()
     }
 }
 
@@ -192,5 +252,41 @@ mod tests {
         assert_eq!(mid.transactions.len(), 1);
         let all = store.replay_all().unwrap();
         assert_eq!(all.transactions.len(), 2);
+    }
+
+    #[test]
+    fn rebuild_matches_prior_hash() {
+        let dir = tempdir().unwrap();
+        let mut store = Store::open(dir.path().join("ledger.sqlite")).unwrap();
+        store
+            .upsert_account(Account::new(
+                AccountId::new("assets:a").unwrap(),
+                AccountType::Asset,
+                Commodity::new("USD").unwrap(),
+                "A",
+            ))
+            .unwrap();
+        store
+            .upsert_account(Account::new(
+                AccountId::new("expenses:b").unwrap(),
+                AccountType::Expense,
+                Commodity::new("USD").unwrap(),
+                "B",
+            ))
+            .unwrap();
+        let tx = Transaction::transfer(
+            chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            AccountId::new("assets:a").unwrap(),
+            AccountId::new("expenses:b").unwrap(),
+            Amount::parse("10").unwrap(),
+            Commodity::new("USD").unwrap(),
+            "one",
+        )
+        .unwrap();
+        store.post_transaction(tx).unwrap();
+        let before = store.assert_replay_matches_materialized().unwrap().0;
+        let after = store.rebuild_projections().unwrap().0;
+        assert_eq!(before.ledger_hash, after.ledger_hash);
+        assert_eq!(store.transaction_count().unwrap(), 1);
     }
 }

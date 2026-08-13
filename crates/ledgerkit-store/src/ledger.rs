@@ -65,7 +65,7 @@ impl Store {
 
     pub fn load_snapshot(&self) -> Result<LedgerSnapshot> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, date, payee, merchant_id, narration, import_batch_id, duplicate_of, tags_json
+            "SELECT id, date, payee, merchant_id, narration, import_batch_id, duplicate_of, tags_json, row_fingerprint
              FROM transactions
              ORDER BY date ASC, id ASC",
         )?;
@@ -79,6 +79,7 @@ impl Store {
                 import_batch_id: row.get(5)?,
                 duplicate_of: row.get(6)?,
                 tags_json: row.get(7)?,
+                row_fingerprint: row.get(8)?,
             })
         })?;
 
@@ -153,8 +154,8 @@ pub(crate) fn insert_transaction_rows(
     let tags_json = serde_json::to_string(&transaction.tags)?;
     conn.execute(
         "INSERT INTO transactions
-           (id, date, payee, merchant_id, narration, import_batch_id, duplicate_of, tags_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+           (id, date, payee, merchant_id, narration, import_batch_id, duplicate_of, tags_json, row_fingerprint)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         (
             transaction.id.to_string(),
             transaction.date.format("%Y-%m-%d").to_string(),
@@ -164,6 +165,7 @@ pub(crate) fn insert_transaction_rows(
             transaction.import_batch_id.map(|b| b.to_string()),
             transaction.duplicate_of.map(|d| d.to_string()),
             tags_json,
+            transaction.row_fingerprint.as_deref(),
         ),
     )?;
 
@@ -194,6 +196,7 @@ struct TxRow {
     import_batch_id: Option<String>,
     duplicate_of: Option<String>,
     tags_json: String,
+    row_fingerprint: Option<String>,
 }
 
 fn decode_transaction(row: TxRow, postings: Vec<Posting>) -> Result<Transaction> {
@@ -225,6 +228,7 @@ fn decode_transaction(row: TxRow, postings: Vec<Posting>) -> Result<Transaction>
             .map(|s| Ok::<_, anyhow::Error>(TransactionId::from_uuid(Uuid::parse_str(&s)?)))
             .transpose()?,
         tags,
+        row_fingerprint: row.row_fingerprint,
     })
 }
 

@@ -5,6 +5,25 @@ use rusqlite::Connection;
 
 use crate::schema::{SCHEMA_SQL, SCHEMA_VERSION};
 
+fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn ensure_column(conn: &Connection, table: &str, column: &str, ddl: &str) -> Result<()> {
+    if !table_has_column(conn, table, column)? {
+        conn.execute_batch(ddl)?;
+    }
+    Ok(())
+}
+
 /// Local LedgerKit workspace store (SQLite).
 pub struct Store {
     path: PathBuf,
@@ -32,6 +51,12 @@ impl Store {
 
     fn migrate(&self) -> Result<()> {
         self.conn.execute_batch(SCHEMA_SQL)?;
+        ensure_column(
+            &self.conn,
+            "transactions",
+            "row_fingerprint",
+            "ALTER TABLE transactions ADD COLUMN row_fingerprint TEXT",
+        )?;
         self.conn.execute(
             "INSERT INTO meta(key, value) VALUES('schema_version', ?1)
              ON CONFLICT(key) DO UPDATE SET value=excluded.value",

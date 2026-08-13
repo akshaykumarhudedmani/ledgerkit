@@ -13,14 +13,14 @@ LedgerKit runs entirely on the user's machine. There is no cloud control plane.
 
 | Threat | Impact | Mitigations |
 |--------|--------|-------------|
-| Malware on host | Can read local ledger/statements | Out of scope to defeat OS malware; document that LedgerKit is not an encrypted vault (optional SQLCipher stretch) |
-| Corrupt / malicious CSV | Wrong books, DoS via huge files | Schema validation, row caps (later), never execute CSV content, deterministic parsers |
+| Malware on host | Can read local ledger/statements | Out of scope to defeat OS malware; LedgerKit is not an encrypted vault |
+| Corrupt / malicious CSV | Wrong books, DoS via huge files | Schema validation, 32 MiB file cap, 200_000 row cap, never execute CSV content, deterministic parsers |
 | Silent data loss | Missing transactions | Append-only events, artifact checksums, `verify`, import reports |
 | Path traversal on export/import paths | Overwrite unexpected files | Reject `..` on export `--out`; proofs stay under `reports/` |
 | Accidental float rounding | Cent-level drift | `Decimal` only; proptest invariants |
 | Supply-chain dependency compromise | Malicious build | Minimal deps, lockfile, CI, prefer `rusqlite` bundled |
 
-## Non-threats (v1)
+## Non-threats
 
 - Remote attackers over the network (no server)
 - Multi-tenant isolation (single-user local tool)
