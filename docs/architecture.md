@@ -1,5 +1,7 @@
 # Architecture
 
+Word list: [glossary.md](glossary.md). Product contract: [final.md](final.md).
+
 ```text
                     ┌─────────────────────────┐
                     │      ledgerkit-cli      │
@@ -10,15 +12,18 @@
 ┌───────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │ledgerkit-import│     │ ledgerkit-core  │     │ledgerkit-export │
 │ BankAdapter    │────▶│ Money/Txn/Verify│◀────│ JSON/Beancount  │
-│ normalize/...  │     │ Events          │     └─────────────────┘
-└───────┬───────┘     └────────┬────────┘
+│ normalize/...  │     │ Events          │     │ CSV             │
+└───────┬───────┘     └────────┬────────┘     └─────────────────┘
         │                      │
         │                      ▼
         │             ┌─────────────────┐
         └────────────▶│ ledgerkit-store │
                       │ SQLite WAL      │
+                      │ events + rows   │
                       └─────────────────┘
 ```
+
+Import also writes `statement_rows`. `rebuild` wipes projection tables and folds the event log back. `why` walks events (and statement-row ids).
 
 ## Plugin surface
 

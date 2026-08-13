@@ -7,6 +7,7 @@
 - Persist `statement_rows`; row-level reconcile; `why` for statement row ids.
 - `ledgerkit rebuild` replays events onto wiped projections.
 - Import file-size cap (32 MiB).
+- README how-to-use, [glossary.md](docs/glossary.md), interview brief.
 - SECURITY.md, CONTRIBUTING.md, versioning notes.
 
 ## 0.1.0 (phases 1–7)
