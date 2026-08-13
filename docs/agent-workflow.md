@@ -32,9 +32,9 @@ These are **not** always-on. Invoke them at the moments below.
 
 ### `/review-bugbot` (or Bugbot review)
 
-**When:** End of **every phase** (2–7), **on the phase PR/branch** (not after merging to `master`).
+**When:** On a PR vs `master` before merge (product freeze and later bug fixes).
 
-**Why:** Defect-first review of the change set before you merge. A branch vs `master` diff is required; reviews on `master` itself see an empty diff.
+**Why:** Defect-first review of the change set. A branch vs `master` diff is required; reviews on `master` itself see an empty diff.
 
 ```text
 /review-bugbot
@@ -115,20 +115,18 @@ Say: review branch changes for LedgerKit Phase N.
 | 5 Reconcile/why | same | `/review-bugbot` + `/review-security` — **wait before Phase 6** |
 | 6 Export/demo | same | `/review-bugbot`; `/split-to-prs` if messy |
 | 7 Hardening | set `LEDGERKIT_HOOK_FULL=1` | Bugbot + Security + optional Canvas + `/loop` if grinding |
+| Final freeze | same | Bugbot + Security — **then stop; bug fixes only** |
 
 **Commits:** agent commits logical chunks during the phase, not only at the end.
 
-**PRs (Phase 4+):** work on `phase-N-<name>`, push, open a PR, *then* run `/` reviews. Merge to `master` only after review.
+**PRs:** work on a feature branch, push, open a PR, *then* run `/` reviews. Merge to `master` only after review. The product is frozen; do not start a new phase.
 
 ---
 
 ## Suggested chat prompts (copy/paste)
 
-**Start Phase 2:**
-> Implement Phase 2 only: persist postings + event append/replay + real verify. Do not start Phase 3.
+**Bug fix:**
+> Fix this invariant/bug only. Do not add a new product surface. Follow docs/final.md.
 
-**End of phase:**
-> Phase N is feature-complete. Run `/review-bugbot` on branch changes and fix all actionable findings.
-
-**Before thesis freeze:**
-> Run `/review-security` on uncommitted + branch changes. Fix path/artifact issues only.
+**Before merge:**
+> Run `/review-bugbot` and `/review-security` on branch changes and fix all actionable findings.

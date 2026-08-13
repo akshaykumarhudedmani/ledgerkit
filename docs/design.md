@@ -116,7 +116,7 @@ Each event stores:
 - `content_hash` of canonical payload (chained with `prev_hash`, id, at, kind)
 - `prev_hash` forming a hash chain
 
-Phase 2 event kinds used for ledger core: `account_upserted`, `posted`.
+Ledger core event kinds: `account_upserted`, `posted`.
 
 **Replay invariant:** folding `Posted` events `0..=N` always rebuilds the same ledger content hash as the materialized tables.
 

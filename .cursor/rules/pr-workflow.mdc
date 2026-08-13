@@ -5,6 +5,6 @@ alwaysApply: true
 
 # PR workflow
 
-- Implement each phase on `phase-N-<name>`, never commit phase work directly to `master`.
-- Open a PR when the phase is feature-complete so `/review-bugbot` and `/review-security` compare against `master`.
+- Implement work on a feature branch, never commit straight to `master`.
+- Open a PR so `/review-bugbot` and `/review-security` compare against `master`.
 - Do not merge until the user has run the required `/` reviews (or explicitly skipped them).
