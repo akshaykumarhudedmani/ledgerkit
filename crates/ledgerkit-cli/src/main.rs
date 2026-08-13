@@ -671,14 +671,24 @@ fn cmd_import(
     }
 
     let accounts = vec![
-        Account::new(bank.clone(), AccountType::Asset, commodity.clone(), account),
         Account::new(
-            expense,
-            AccountType::Expense,
+            bank.clone(),
+            AccountType::from_id_prefix(&bank).unwrap_or(AccountType::Asset),
+            commodity.clone(),
+            account,
+        ),
+        Account::new(
+            expense.clone(),
+            AccountType::from_id_prefix(&expense).unwrap_or(AccountType::Expense),
             commodity.clone(),
             offset_expense,
         ),
-        Account::new(income, AccountType::Income, commodity, offset_income),
+        Account::new(
+            income.clone(),
+            AccountType::from_id_prefix(&income).unwrap_or(AccountType::Income),
+            commodity,
+            offset_income,
+        ),
     ];
     let spec = ImportBatchSpec {
         id: batch_id,
@@ -756,10 +766,10 @@ fn statement_specs(
             },
         })
         .collect();
-    let used: std::collections::HashSet<i64> = rows.iter().map(|r| r.row_number).collect();
+    let mut used: std::collections::HashSet<i64> = rows.iter().map(|r| r.row_number).collect();
     for (i, err) in parse.errors.iter().enumerate() {
         let row_number = parse_error_row_number(err).unwrap_or(-(i as i64 + 1));
-        if used.contains(&row_number) {
+        if !used.insert(row_number) {
             continue;
         }
         rows.push(StatementRowSpec {
@@ -898,5 +908,25 @@ mod tests {
         assert!(rows.iter().any(|r| r.parse_status == "parse_error"
             && r.row_number == 3
             && r.error.as_deref() == Some("parse error at row 3: missing amount")));
+    }
+
+    #[test]
+    fn statement_specs_dedupe_parse_errors_same_row() {
+        let raw = RawTransactions {
+            adapter_id: "generic_csv".into(),
+            transactions: vec![],
+        };
+        let converted = ledgerkit_import::ConvertReport::default();
+        let parse = ParseReport {
+            ok_rows: 0,
+            error_rows: 2,
+            errors: vec![
+                "parse error at row 3: missing amount".into(),
+                "parse error at row 3: also bad".into(),
+            ],
+        };
+        let rows = statement_specs(&raw, &converted, &parse);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].row_number, 3);
     }
 }
