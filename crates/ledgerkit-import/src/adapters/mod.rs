@@ -1,4 +1,4 @@
-//! Built-in adapters (v1 targets).
+//! Built-in adapters.
 
 mod credit_card;
 mod custom;
@@ -111,5 +111,17 @@ mod tests {
                 "{name} error_rows"
             );
         }
+    }
+
+    #[test]
+    fn custom_adapter_reads_generic_headers() {
+        let (raw, report) = CustomMappingAdapter::default()
+            .parse(include_bytes!(
+                "../../../../fixtures/csv/generic/sample.csv"
+            ))
+            .unwrap();
+        assert_eq!(report.error_rows, 0);
+        assert_eq!(raw.transactions.len(), 4);
+        assert_eq!(raw.adapter_id, "custom");
     }
 }

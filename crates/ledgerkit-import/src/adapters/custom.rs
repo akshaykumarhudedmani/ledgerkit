@@ -4,7 +4,7 @@ use super::hdfc::parse_simple_csv;
 use crate::adapter::{AdapterError, AdapterId, BankAdapter, ParseReport};
 use crate::raw::RawTransaction;
 
-/// User-defined column mapping adapter (YAML/JSON config later).
+/// Column-mapped CSV. Default columns are Date / Description / Amount (case-insensitive).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomMappingAdapter {
     pub date_column: String,

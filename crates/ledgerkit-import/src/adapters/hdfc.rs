@@ -1,7 +1,7 @@
 use crate::adapter::{AdapterError, AdapterId, BankAdapter, ParseReport};
 use crate::raw::{RawTransaction, RawTransactions};
 
-/// HDFC Bank account statement CSV (India) — Phase 3 fills real column mapping.
+/// HDFC Bank account statement CSV (India): Date, Narration, Withdrawal/Deposit.
 #[derive(Debug, Default, Clone)]
 pub struct HdfcCsvAdapter;
 
@@ -20,11 +20,11 @@ impl BankAdapter for HdfcCsvAdapter {
             bytes,
             &["Date", "Narration", "Withdrawal Amt.", "Deposit Amt."],
             |row, headers, record| {
-                let date = get(headers, record, "Date")?;
-                let narration = get(headers, record, "Narration")?;
+                let date = get(headers, record, "Date", row)?;
+                let narration = get(headers, record, "Narration", row)?;
                 let withdrawal =
-                    blank_amount(get(headers, record, "Withdrawal Amt.").unwrap_or(""));
-                let deposit = blank_amount(get(headers, record, "Deposit Amt.").unwrap_or(""));
+                    blank_amount(get(headers, record, "Withdrawal Amt.", row).unwrap_or(""));
+                let deposit = blank_amount(get(headers, record, "Deposit Amt.", row).unwrap_or(""));
                 let amount = if !deposit.is_empty() {
                     deposit
                 } else if !withdrawal.is_empty() {
@@ -41,7 +41,7 @@ impl BankAdapter for HdfcCsvAdapter {
                     amount_raw: amount,
                     currency_raw: Some("INR".into()),
                     description_raw: narration.to_string(),
-                    balance_raw: get(headers, record, "Closing Balance")
+                    balance_raw: get(headers, record, "Closing Balance", row)
                         .ok()
                         .map(str::to_string),
                     source_refs: vec![format!("hdfc:row:{row}")],
@@ -128,13 +128,14 @@ pub(crate) fn get<'a>(
     headers: &[String],
     record: &'a csv::StringRecord,
     name: &str,
+    row: usize,
 ) -> Result<&'a str, AdapterError> {
     let idx = headers
         .iter()
         .position(|h| h.eq_ignore_ascii_case(name))
         .ok_or_else(|| AdapterError::Schema(format!("column {name} not found")))?;
     record.get(idx).ok_or_else(|| AdapterError::Row {
-        row: 0,
+        row,
         message: format!("missing field {name}"),
     })
 }

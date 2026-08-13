@@ -120,7 +120,7 @@ impl Store {
             },
             prev,
         );
-        append_sealed_event(&db_tx, imported)?;
+        let stored_imported = append_sealed_event(&db_tx, imported)?;
 
         insert_statement_rows(
             &db_tx,
@@ -132,7 +132,7 @@ impl Store {
 
         let mut posted = 0u64;
         let mut skipped_existing = 0u64;
-        let mut last_seq = 0u64;
+        let mut last_seq = stored_imported.seq;
         for transaction in transactions {
             ledgerkit_core::verify_transaction(&transaction)?;
             let exists: i64 = db_tx.query_row(
@@ -325,14 +325,17 @@ mod tests {
             transaction_id: None,
         }];
         let outcome = store.apply_import(spec, vec![bank], vec![], rows).unwrap();
-        assert!(matches!(
-            outcome,
+        match outcome {
             ImportOutcome::Applied {
                 posted: 0,
                 skipped_existing: 0,
+                last_seq,
                 ..
+            } => {
+                assert!(last_seq > 0, "imported event must set last_seq");
             }
-        ));
+            other => panic!("{other:?}"),
+        }
         let report = store.prove_row_reconcile("assets:bank").unwrap();
         assert_eq!(report.convert_errors.len(), 1);
         assert!(!report.ok());
